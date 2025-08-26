@@ -2,15 +2,15 @@ package http
 
 import (
 	"encoding/json"
-	"loopi-api/internal/usecase/auth"
-	"net/http"
+	"loopi-api/internal/usecase"
+	nethttp "net/http"
 )
 
 type AuthHandler struct {
-	authUseCase auth.AuthUseCase
+	authUseCase usecase.AuthUseCase
 }
 
-func NewAuthHandler(authUseCase auth.AuthUseCase) *AuthHandler {
+func NewAuthHandler(authUseCase usecase.AuthUseCase) *AuthHandler {
 	return &AuthHandler{authUseCase: authUseCase}
 }
 
@@ -19,7 +19,7 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) Login(w nethttp.ResponseWriter, r *nethttp.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		BadRequest(w, "Invalid request body")

@@ -6,7 +6,7 @@ import (
 	"loopi-api/config"
 	"loopi-api/internal/delivery/http"
 	"loopi-api/internal/middleware"
-	"loopi-api/internal/usecase/auth"
+	"loopi-api/internal/usecase"
 	nethttp "net/http"
 	"os"
 )
@@ -17,22 +17,33 @@ func main() {
 	// Instanciar conexión a DB
 
 	// Instanciar casos de uso
-	authUseCase := auth.NewAuthUseCase()
-	authHandle := http.NewAuthHandler(authUseCase)
+	authUseCase := usecase.NewAuthUseCase()
+	authHandler := http.NewAuthHandler(authUseCase)
 
-	// Crear handlers
+	franchiseUseCase := usecase.NewFranchiseUseCase()
+	franchiseHandler := http.NewFranchiseHandler(franchiseUseCase)
 
 	// Configurar router
 	r := chi.NewRouter()
 
 	// Rutas públicas
 	r.Route("/auth", func(r chi.Router) {
-		r.Post("/login", authHandle.Login)
+		r.Post("/login", authHandler.Login)
+	})
+
+	r.Route("/franchises", func(r chi.Router) {
+		r.Use(middleware.JWTMiddleware)
+		r.Use(middleware.RequireRoles("admin", "supervisor"))
+
+		r.Post("/", franchiseHandler.Create)
 	})
 
 	r.Route("/employees", func(r chi.Router) {
 		r.Use(middleware.JWTMiddleware)
-		//r.Get("/employees", auth.GetEmployee)
+		r.Use(middleware.RequireRoles("admin", "supervisor"))
+		r.Use(middleware.RequireFranchiseAccess())
+
+		r.Post("/", franchiseHandler.Create)
 	})
 
 	// Rutas protegidas
