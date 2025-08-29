@@ -1,19 +1,16 @@
-package domain
+package models
 
 import "time"
 
 type Store struct {
 	BaseModel
 
-	ID          uint   `gorm:"primaryKey"`
 	FranchiseID uint   `gorm:"not null"`
 	Code        string `gorm:"size:3;unique"`
 	Name        string `gorm:"size:100;not null"`
 	Location    string `gorm:"size:255"`
 	Address     string `gorm:"size:255"`
 	IsActive    bool   `gorm:"default:true"`
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
 
 	Franchise  Franchise
 	StoreUsers []StoreUser

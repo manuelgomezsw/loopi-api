@@ -2,10 +2,13 @@ package middleware
 
 import (
 	"context"
-	"github.com/golang-jwt/jwt/v5"
+	"loopi-api/config"
 	"net/http"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func JWTMiddleware(next http.Handler) http.Handler {
@@ -18,7 +21,9 @@ func JWTMiddleware(next http.Handler) http.Handler {
 
 		tokenString := strings.TrimPrefix(auth, "Bearer ")
 
-		token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+		claims := &config.CustomClaims{}
+
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, jwt.ErrSignatureInvalid
 			}
@@ -30,31 +35,15 @@ func JWTMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			http.Error(w, "Invalid claims", http.StatusUnauthorized)
+		if claims.ExpiresAt == nil || claims.ExpiresAt.Time.Before(time.Now()) {
+			http.Error(w, "Token expired", http.StatusUnauthorized)
 			return
 		}
 
-		// Validar presencia de datos
-		userID, ok := claims["user_id"].(float64)
-		if !ok {
-			http.Error(w, "Missing user ID", http.StatusUnauthorized)
-			return
-		}
-
-		// Contexto extendido
-		ctx := context.WithValue(r.Context(), ContextUserID, int(userID))
-
-		if email, ok := claims["email"].(string); ok {
-			ctx = context.WithValue(ctx, ContextEmail, email)
-		}
-		if role, ok := claims["role"].(string); ok {
-			ctx = context.WithValue(ctx, ContextRole, role)
-		}
-		if fid, ok := claims["franchise_id"].(float64); ok {
-			ctx = context.WithValue(ctx, ContextFranchiseID, int(fid))
-		}
+		ctx := context.WithValue(r.Context(), ContextUserID, claims.UserID)
+		ctx = context.WithValue(ctx, ContextEmail, claims.Email)
+		ctx = context.WithValue(ctx, ContextRole, claims.Role)
+		ctx = context.WithValue(ctx, ContextFranchiseID, claims.FranchiseID)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

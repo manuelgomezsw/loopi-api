@@ -1,11 +1,10 @@
-package domain
+package models
 
 import "time"
 
 type User struct {
 	BaseModel
 
-	ID             uint      `gorm:"primaryKey"`
 	FirstName      string    `gorm:"size:100;not null"`
 	LastName       string    `gorm:"size:100;not null"`
 	DocumentType   string    `gorm:"size:20;not null"`
@@ -17,8 +16,6 @@ type User struct {
 	Position       string    `gorm:"size:100;not null"`
 	Salary         float64   `gorm:"not null"`
 	IsActive       bool      `gorm:"default:true"`
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
 
 	UserRoles  []UserRole
 	StoreUsers []StoreUser

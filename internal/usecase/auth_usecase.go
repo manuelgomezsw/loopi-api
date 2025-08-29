@@ -1,32 +1,63 @@
 package usecase
 
 import (
-	"fmt"
+	"errors"
+	"golang.org/x/crypto/bcrypt"
+	"log"
 	"loopi-api/config"
+	"loopi-api/internal/repository"
 )
 
 type AuthUseCase interface {
-	Login(user, password string) (string, error)
+	Login(email, password string) (string, error)
 }
 
 type authUseCase struct {
-	// Aquí podrías tener UserRepository inyectado
+	userRepo repository.UserRepository
 }
 
-func NewAuthUseCase() AuthUseCase {
-	return &authUseCase{}
+func NewAuthUseCase(userRepo repository.UserRepository) AuthUseCase {
+	return &authUseCase{userRepo: userRepo}
 }
 
 func (a *authUseCase) Login(email, password string) (string, error) {
-	// TODO: validar usuario contra la base
-	if email != "admin@loopi.com" || password != "1234" {
-		return "", fmt.Errorf("invalid credentials")
+	user, err := a.userRepo.FindByEmail(email)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+		return "", errors.New("invalid credentials")
 	}
 
-	// Generar token
-	token, err := config.GenerateJWT(1, email)
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		return "", errors.New("invalid credentials")
+	}
+
+	// Buscar el rol asociado a la franquicia seleccionada
+	/*
+	   var roleName string
+	   var permissions []string
+	   matchFound := false
+	   for _, ur := range user.UserRoles {
+	     if int(ur.FranchiseID) == franchiseID {
+	       roleName = ur.Role.Name
+	       for _, perm := range ur.Role.RolePermissions {
+	         permissions = append(permissions, perm.Permission.Name)
+	       }
+	       matchFound = true
+	       break
+	     }
+	   }
+	   if !matchFound {
+	     return "", errors.New("user does not belong to this franchise")
+	   }
+	*/
+	token, err := config.GenerateJWT(
+		int(user.ID),
+		user.Email,
+		"roleName",
+		1,
+	)
 	if err != nil {
-		return "", err
+		return "", errors.New("could not generate token")
 	}
 
 	return token, nil

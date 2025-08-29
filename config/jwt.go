@@ -6,11 +6,17 @@ import (
 	"time"
 )
 
-func GenerateJWT(userID int, email string) (string, error) {
-	claims := jwt.MapClaims{
-		"user_id": userID,
-		"email":   email,
-		"exp":     time.Now().Add(10 * time.Minute).Unix(),
+func GenerateJWT(userID int, email, role string, franchiseID int) (string, error) {
+	claims := CustomClaims{
+		UserID:      userID,
+		Email:       email,
+		Role:        role,
+		FranchiseID: franchiseID,
+		//Permissions: permissions,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

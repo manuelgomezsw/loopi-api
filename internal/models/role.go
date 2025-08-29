@@ -1,14 +1,13 @@
-package domain
+package models
 
 type Role struct {
 	BaseModel
 
-	ID          uint   `gorm:"primaryKey"`
 	Name        string `gorm:"size:50;unique;not null"`
 	Description string
 	IsActive    bool `gorm:"default:true"`
 
-	RolePermissions []RolePermission
+	RolePermissions []RolePermission `gorm:"many2many:role_permissions"`
 	UserRoles       []UserRole
 }
 

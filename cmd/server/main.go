@@ -2,22 +2,35 @@ package main
 
 import (
 	"github.com/go-chi/chi/v5"
+	"github.com/joho/godotenv"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 	"log"
 	"loopi-api/config"
 	"loopi-api/internal/delivery/http"
 	"loopi-api/internal/middleware"
+	"loopi-api/internal/repository"
 	"loopi-api/internal/usecase"
 	nethttp "net/http"
 	"os"
 )
 
 func main() {
-	config.LoadEnv()
+	// Cargar configuración
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, proceeding with system env")
+	}
+	config.LoadSecrets()
 
 	// Instanciar conexión a DB
+	db, err := gorm.Open(mysql.Open(config.GetDB()), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("DB connection error: %v", err)
+	}
 
 	// Instanciar casos de uso
-	authUseCase := usecase.NewAuthUseCase()
+	userRepo := repository.NewUserRepository(db)
+	authUseCase := usecase.NewAuthUseCase(userRepo)
 	authHandler := http.NewAuthHandler(authUseCase)
 
 	franchiseUseCase := usecase.NewFranchiseUseCase()
