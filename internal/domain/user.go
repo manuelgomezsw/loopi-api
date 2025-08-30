@@ -1,4 +1,4 @@
-package models
+package domain
 
 import "time"
 
@@ -12,7 +12,7 @@ type User struct {
 	Birthdate      time.Time `gorm:"not null"`
 	Phone          string    `gorm:"size:50;not null"`
 	Email          string    `gorm:"size:100;unique;not null"`
-	PasswordHash   string    `gorm:"size:255;not null"`
+	Password       string    `gorm:"size:255;not null"`
 	Position       string    `gorm:"size:100;not null"`
 	Salary         float64   `gorm:"not null"`
 	IsActive       bool      `gorm:"default:true"`

@@ -6,13 +6,13 @@ import (
 	"time"
 )
 
-func GenerateJWT(userID int, email, role string, franchiseID int) (string, error) {
+func GenerateJWT(userID int, email, role string, franchiseID, storeID uint) (string, error) {
 	claims := CustomClaims{
 		UserID:      userID,
 		Email:       email,
 		Role:        role,
 		FranchiseID: franchiseID,
-		//Permissions: permissions,
+		StoreID:     storeID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),

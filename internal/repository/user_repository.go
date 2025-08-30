@@ -2,11 +2,12 @@ package repository
 
 import (
 	"gorm.io/gorm"
-	"loopi-api/internal/models"
+	"loopi-api/internal/domain"
 )
 
 type UserRepository interface {
-	FindByEmail(email string) (*models.User, error)
+	FindByEmail(email string) (*domain.User, error)
+	FindByID(userID int) (*domain.User, error)
 }
 
 type userRepository struct {
@@ -17,12 +18,10 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 	return &userRepository{db: db}
 }
 
-func (r *userRepository) FindByEmail(email string) (*models.User, error) {
-	var user models.User
+func (r *userRepository) FindByEmail(email string) (*domain.User, error) {
+	var user domain.User
 
 	err := r.db.Preload("UserRoles.Role").
-		Preload("UserRoles.Franchise").
-		Preload("StoreUsers.Store").
 		Where("email = ? AND is_active = ?", email, true).
 		First(&user).Error
 
@@ -30,5 +29,17 @@ func (r *userRepository) FindByEmail(email string) (*models.User, error) {
 		return nil, err
 	}
 
+	return &user, nil
+}
+
+func (r *userRepository) FindByID(userID int) (*domain.User, error) {
+	var user domain.User
+	err := r.db.
+		Preload("UserRoles.Role").
+		Preload("UserRoles.Franchise").
+		First(&user, userID).Error
+	if err != nil {
+		return nil, err
+	}
 	return &user, nil
 }

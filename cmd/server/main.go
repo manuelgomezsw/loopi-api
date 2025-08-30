@@ -42,8 +42,14 @@ func main() {
 	// Rutas públicas
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/login", authHandler.Login)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.JWTMiddleware)
+			r.Post("/context", authHandler.SelectContext)
+		})
 	})
 
+	// Rutas protegidas
 	r.Route("/franchises", func(r chi.Router) {
 		r.Use(middleware.JWTMiddleware)
 		r.Use(middleware.RequireRoles("admin", "supervisor"))
@@ -58,8 +64,6 @@ func main() {
 
 		r.Post("/", franchiseHandler.Create)
 	})
-
-	// Rutas protegidas
 
 	// Servidor
 	port := os.Getenv("PORT")

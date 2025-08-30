@@ -9,12 +9,13 @@ type CustomClaims struct {
 	UserID      int    `json:"user_id"`
 	Email       string `json:"email"`
 	Role        string `json:"role"`
-	FranchiseID int    `json:"franchise_id"`
+	FranchiseID uint   `json:"franchise_id"`
+	StoreID     uint   `json:"store_id"`
 	jwt.RegisteredClaims
 }
 
 // NewClaims Helper para generar claims estándar
-func NewClaims(userID int, email, role string, franchiseID int) CustomClaims {
+func NewClaims(userID int, email, role string, franchiseID uint) CustomClaims {
 	now := time.Now()
 	return CustomClaims{
 		UserID:      userID,

@@ -1,4 +1,4 @@
-package models
+package domain
 
 type Franchise struct {
 	BaseModel
