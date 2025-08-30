@@ -36,6 +36,9 @@ func main() {
 	franchiseUseCase := usecase.NewFranchiseUseCase()
 	franchiseHandler := http.NewFranchiseHandler(franchiseUseCase)
 
+	employeeUseCase := usecase.NewEmployeeUseCase(userRepo)
+	employeeHandler := http.NewEmployeeHandler(employeeUseCase)
+
 	// Configurar router
 	r := chi.NewRouter()
 
@@ -59,10 +62,10 @@ func main() {
 
 	r.Route("/employees", func(r chi.Router) {
 		r.Use(middleware.JWTMiddleware)
-		r.Use(middleware.RequireRoles("admin", "supervisor"))
+		r.Use(middleware.RequireRoles("admin"))
 		r.Use(middleware.RequireFranchiseAccess())
 
-		r.Post("/", franchiseHandler.Create)
+		r.Post("/", employeeHandler.Create)
 	})
 
 	// Servidor

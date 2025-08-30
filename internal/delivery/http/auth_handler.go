@@ -15,18 +15,18 @@ func NewAuthHandler(authUseCase usecase.AuthUseCase) *AuthHandler {
 	return &AuthHandler{authUseCase: authUseCase}
 }
 
-type LoginRequest struct {
+type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-type ContextRequest struct {
-	FranchiseID uint `json:"franchise_id"`
-	StoreID     uint `json:"store_id"`
+type contextRequest struct {
+	FranchiseID int `json:"franchise_id"`
+	StoreID     int `json:"store_id"`
 }
 
 func (h *AuthHandler) Login(w nethttp.ResponseWriter, r *nethttp.Request) {
-	var req LoginRequest
+	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		BadRequest(w, "Invalid request body")
 		return
@@ -42,7 +42,7 @@ func (h *AuthHandler) Login(w nethttp.ResponseWriter, r *nethttp.Request) {
 }
 
 func (h *AuthHandler) SelectContext(w nethttp.ResponseWriter, r *nethttp.Request) {
-	var req ContextRequest
+	var req contextRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FranchiseID == 0 {
 		BadRequest(w, "Missing or invalid context information")
 		return

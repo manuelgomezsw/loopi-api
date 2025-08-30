@@ -8,6 +8,7 @@ import (
 type UserRepository interface {
 	FindByEmail(email string) (*domain.User, error)
 	FindByID(userID int) (*domain.User, error)
+	Create(user domain.User, roleID, franchiseID int) error
 }
 
 type userRepository struct {
@@ -42,4 +43,18 @@ func (r *userRepository) FindByID(userID int) (*domain.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+func (r *userRepository) Create(user domain.User, roleID, franchiseID int) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&user).Error; err != nil {
+			return err
+		}
+		userRole := domain.UserRole{
+			UserID:      user.UserID,
+			RoleID:      roleID,
+			FranchiseID: franchiseID,
+		}
+		return tx.Create(&userRole).Error
+	})
 }
