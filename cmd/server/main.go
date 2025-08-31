@@ -39,6 +39,13 @@ func main() {
 	employeeUseCase := usecase.NewEmployeeUseCase(userRepo)
 	employeeHandler := http.NewEmployeeHandler(employeeUseCase)
 
+	shiftRepo := repository.NewShiftRepository(db)
+	shiftUseCase := usecase.NewShiftUseCase(shiftRepo)
+	shiftHandler := http.NewShiftHandler(shiftUseCase)
+
+	calendarUseCase := usecase.NewCalendarUseCase()
+	calendarHandler := http.NewCalendarHandler(calendarUseCase)
+
 	// Configurar router
 	r := chi.NewRouter()
 
@@ -48,6 +55,7 @@ func main() {
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.JWTMiddleware)
+
 			r.Post("/context", authHandler.SelectContext)
 		})
 	})
@@ -55,7 +63,7 @@ func main() {
 	// Rutas protegidas
 	r.Route("/franchises", func(r chi.Router) {
 		r.Use(middleware.JWTMiddleware)
-		r.Use(middleware.RequireRoles("admin", "supervisor"))
+		r.Use(middleware.RequireRoles("admin"))
 
 		r.Post("/", franchiseHandler.Create)
 	})
@@ -66,6 +74,22 @@ func main() {
 		r.Use(middleware.RequireFranchiseAccess())
 
 		r.Post("/", employeeHandler.Create)
+	})
+
+	r.Route("/shifts", func(r chi.Router) {
+		r.Use(middleware.JWTMiddleware)
+		r.Use(middleware.RequireRoles("admin"))
+
+		r.Post("/", shiftHandler.Create)
+	})
+
+	r.Route("/calendar", func(r chi.Router) {
+		r.Use(middleware.JWTMiddleware)
+		r.Use(middleware.RequireRoles("admin"))
+
+		r.Get("/holidays", calendarHandler.GetHolidays)
+		r.Get("/month-summary", calendarHandler.GetMonthSummary)
+		r.Post("/clear-cache", calendarHandler.ClearCache)
 	})
 
 	// Servidor
