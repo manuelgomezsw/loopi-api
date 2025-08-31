@@ -8,6 +8,7 @@ const (
 	ContextUserID      contextKey = "user_id"
 	ContextEmail       contextKey = "email"
 	ContextRole        contextKey = "role"
+	ContextStore       contextKey = "store_id"
 	ContextFranchiseID contextKey = "franchise_id"
 )
 
@@ -30,4 +31,11 @@ func GetRole(ctx context.Context) string {
 		return role
 	}
 	return ""
+}
+
+func GetStoreID(ctx context.Context) int {
+	if id, ok := ctx.Value(ContextStore).(int); ok {
+		return id
+	}
+	return 0
 }

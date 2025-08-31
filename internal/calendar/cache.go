@@ -13,22 +13,24 @@ var (
 
 // GetColombianHolidaysCached Cache de festivos por año
 func GetColombianHolidaysCached(year int) []time.Time {
-	key := fmt.Sprintf("%d", year)
-	if val, ok := holidayCache.Load(key); ok {
-		return val.([]time.Time)
-	}
+	/*
+	    key := fmt.Sprintf("%d", year)
+	  	if val, ok := holidayCache.Load(key); ok {
+	  		return val.([]time.Time)
+	  	}*/
 	holidays := GetColombianHolidays(year)
-	holidayCache.Store(key, holidays)
+	//holidayCache.Store(key, holidays)
 	return holidays
 }
 
 // GetColombianHolidaysByMonthCached Cache de festivos por mes
 func GetColombianHolidaysByMonthCached(year int, month int) []time.Time {
-	key := fmt.Sprintf("%d-%02d", year, month)
-	if val, ok := holidayCache.Load(key); ok {
-		return val.([]time.Time)
-	}
-
+	/*
+	    key := fmt.Sprintf("%d-%02d", year, month)
+	  	if val, ok := holidayCache.Load(key); ok {
+	  		return val.([]time.Time)
+	  	}
+	*/
 	all := GetColombianHolidaysCached(year)
 
 	var filtered []time.Time
@@ -38,7 +40,7 @@ func GetColombianHolidaysByMonthCached(year int, month int) []time.Time {
 		}
 	}
 
-	holidayCache.Store(key, filtered)
+	//holidayCache.Store(key, filtered)
 	return filtered
 }
 

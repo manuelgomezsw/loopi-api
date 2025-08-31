@@ -68,9 +68,26 @@ func (h *CalendarHandler) GetMonthSummary(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	holidays := h.calendarUseCase.GetHolidaysByMonth(year, month)
+	holidayDates := calendar.GetColombianHolidaysByMonthCached(year, month)
+	holidayMap := make(map[string]bool)
+	for _, d := range holidayDates {
+		holidayMap[d.Format("2006-01-02")] = true
+	}
+
 	ordinary := h.calendarUseCase.CountOrdinaryDays(year, month)
 	sundays := h.calendarUseCase.CountSundays(year, month)
+
+	// Restar solo los festivos que NO caen domingo
+	excludeCount := 0
+	for _, hDate := range holidayDates {
+		if hDate.Weekday() != time.Sunday {
+			excludeCount++
+		}
+	}
+	adjustedOrdinary := ordinary - excludeCount
+	if adjustedOrdinary < 0 {
+		adjustedOrdinary = 0
+	}
 
 	result := struct {
 		Holidays struct {
@@ -81,12 +98,12 @@ func (h *CalendarHandler) GetMonthSummary(w http.ResponseWriter, r *http.Request
 		Sundays      int `json:"sundays"`
 	}{}
 
-	result.Holidays.Count = len(holidays)
-	result.Holidays.Dates = make([]string, len(holidays))
-	for i, d := range holidays {
+	result.Holidays.Count = len(holidayDates)
+	result.Holidays.Dates = make([]string, len(holidayDates))
+	for i, d := range holidayDates {
 		result.Holidays.Dates[i] = d.Format("2006-01-02")
 	}
-	result.OrdinaryDays = ordinary
+	result.OrdinaryDays = adjustedOrdinary
 	result.Sundays = sundays
 
 	OK(w, result)
