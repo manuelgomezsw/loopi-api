@@ -9,7 +9,7 @@ import (
 	"loopi-api/config"
 	"loopi-api/internal/delivery/http"
 	"loopi-api/internal/middleware"
-	"loopi-api/internal/repository"
+	repository "loopi-api/internal/repository/mysql"
 	"loopi-api/internal/usecase"
 	nethttp "net/http"
 	"os"
@@ -39,6 +39,12 @@ func main() {
 	employeeUseCase := usecase.NewEmployeeUseCase(userRepo)
 	employeeHandler := http.NewEmployeeHandler(employeeUseCase)
 
+	assignedRepo := repository.NewAssignedShiftRepository(db)
+	absenceRepo := repository.NewAbsenceRepository(db)
+	noveltyRepo := repository.NewNoveltyRepository(db)
+	employeeHoursUseCase := usecase.NewEmployeeHoursUseCase(assignedRepo, absenceRepo, noveltyRepo, userRepo)
+	employeeHoursHandler := http.NewEmployeeHoursHandler(employeeHoursUseCase)
+
 	shiftRepo := repository.NewShiftRepository(db)
 	shiftUseCase := usecase.NewShiftUseCase(shiftRepo)
 	shiftHandler := http.NewShiftHandler(shiftUseCase)
@@ -49,6 +55,12 @@ func main() {
 
 	calendarUseCase := usecase.NewCalendarUseCase()
 	calendarHandler := http.NewCalendarHandler(calendarUseCase)
+
+	absenceUseCase := usecase.NewAbsenceUseCase(absenceRepo)
+	absenceHanlder := http.NewAbsenceHandler(absenceUseCase)
+
+	noveltyUseCase := usecase.NewNoveltyUseCase(noveltyRepo)
+	noveltyHanlder := http.NewNoveltyHandler(noveltyUseCase)
 
 	// Configurar router
 	r := chi.NewRouter()
@@ -80,6 +92,14 @@ func main() {
 		r.Post("/", employeeHandler.Create)
 	})
 
+	r.Route("/employee-hours", func(r chi.Router) {
+		r.Use(middleware.JWTMiddleware)
+		r.Use(middleware.RequireRoles("admin"))
+		r.Use(middleware.RequireFranchiseAccess())
+
+		r.Get("/{id}", employeeHoursHandler.GetMonthlySummary)
+	})
+
 	r.Route("/calendar", func(r chi.Router) {
 		r.Use(middleware.JWTMiddleware)
 		r.Use(middleware.RequireRoles("admin"))
@@ -103,6 +123,22 @@ func main() {
 		r.Use(middleware.RequireRoles("admin"))
 
 		r.Post("/preview", shiftProjectionHanlder.Preview)
+	})
+
+	r.Route("/absences", func(r chi.Router) {
+		r.Use(middleware.JWTMiddleware)
+		r.Use(middleware.RequireRoles("admin"))
+
+		r.Post("/", absenceHanlder.Create)
+		r.Get("/", absenceHanlder.GetByEmployeeAndMonth)
+	})
+
+	r.Route("/novelties", func(r chi.Router) {
+		r.Use(middleware.JWTMiddleware)
+		r.Use(middleware.RequireRoles("admin"))
+
+		r.Post("/", noveltyHanlder.Create)
+		r.Get("/", noveltyHanlder.GetByEmployeeAndMonth)
 	})
 
 	// Servidor

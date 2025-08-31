@@ -10,3 +10,10 @@ type Shift struct {
 	LunchMinutes int    `json:"lunch_minutes"`
 	IsActive     bool   `json:"is_active"`
 }
+
+type AssignedShift struct {
+	Date         string `json:"date"`       // "YYYY-MM-DD"
+	StartTime    string `json:"start_time"` // "07:30"
+	EndTime      string `json:"end_time"`   // "19:30"
+	LunchMinutes int    `json:"lunch_minutes"`
+}
