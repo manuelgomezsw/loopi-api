@@ -33,8 +33,13 @@ func main() {
 	authUseCase := usecase.NewAuthUseCase(userRepo)
 	authHandler := http.NewAuthHandler(authUseCase)
 
-	franchiseUseCase := usecase.NewFranchiseUseCase()
+	franchiseRepo := repository.NewFranchiseRepository(db)
+	franchiseUseCase := usecase.NewFranchiseUseCase(franchiseRepo)
 	franchiseHandler := http.NewFranchiseHandler(franchiseUseCase)
+
+	storeRepo := repository.NewStoreRepository(db)
+	storeUseCase := usecase.NewStoreUseCase(storeRepo)
+	storeHandler := http.NewStoreHandler(storeUseCase)
 
 	employeeUseCase := usecase.NewEmployeeUseCase(userRepo)
 	employeeHandler := http.NewEmployeeHandler(employeeUseCase)
@@ -51,16 +56,16 @@ func main() {
 
 	workConfigRepo := repository.NewWorkConfigRepository(db)
 	shiftProjectionUseCase := usecase.NewShiftProjectionUseCase(shiftRepo, workConfigRepo)
-	shiftProjectionHanlder := http.NewShiftProjectionHandler(shiftProjectionUseCase)
+	shiftProjectionHandler := http.NewShiftProjectionHandler(shiftProjectionUseCase)
 
 	calendarUseCase := usecase.NewCalendarUseCase()
 	calendarHandler := http.NewCalendarHandler(calendarUseCase)
 
 	absenceUseCase := usecase.NewAbsenceUseCase(absenceRepo)
-	absenceHanlder := http.NewAbsenceHandler(absenceUseCase)
+	absenceHandler := http.NewAbsenceHandler(absenceUseCase)
 
 	noveltyUseCase := usecase.NewNoveltyUseCase(noveltyRepo)
-	noveltyHanlder := http.NewNoveltyHandler(noveltyUseCase)
+	noveltyHandler := http.NewNoveltyHandler(noveltyUseCase)
 
 	// Configurar router
 	r := chi.NewRouter()
@@ -82,6 +87,20 @@ func main() {
 		r.Use(middleware.RequireRoles("admin"))
 
 		r.Post("/", franchiseHandler.Create)
+		r.Get("/", franchiseHandler.GetAll)
+		r.Get("/{id}", franchiseHandler.GetById)
+	})
+
+	r.Route("/stores", func(r chi.Router) {
+		r.Use(middleware.JWTMiddleware)
+		r.Use(middleware.RequireRoles("admin"))
+
+		r.Get("/", storeHandler.GetAll)
+		r.Get("/{id}", storeHandler.GetByID)
+		r.Get("/franchise/{franchiseID}", storeHandler.GetByFranchiseID)
+		r.Post("/", storeHandler.Create)
+		r.Put("/{id}", storeHandler.Update)
+		r.Delete("/{id}", storeHandler.Delete)
 	})
 
 	r.Route("/employees", func(r chi.Router) {
@@ -122,23 +141,23 @@ func main() {
 		r.Use(middleware.JWTMiddleware)
 		r.Use(middleware.RequireRoles("admin"))
 
-		r.Post("/preview", shiftProjectionHanlder.Preview)
+		r.Post("/preview", shiftProjectionHandler.Preview)
 	})
 
 	r.Route("/absences", func(r chi.Router) {
 		r.Use(middleware.JWTMiddleware)
 		r.Use(middleware.RequireRoles("admin"))
 
-		r.Post("/", absenceHanlder.Create)
-		r.Get("/", absenceHanlder.GetByEmployeeAndMonth)
+		r.Post("/", absenceHandler.Create)
+		r.Get("/", absenceHandler.GetByEmployeeAndMonth)
 	})
 
 	r.Route("/novelties", func(r chi.Router) {
 		r.Use(middleware.JWTMiddleware)
 		r.Use(middleware.RequireRoles("admin"))
 
-		r.Post("/", noveltyHanlder.Create)
-		r.Get("/", noveltyHanlder.GetByEmployeeAndMonth)
+		r.Post("/", noveltyHandler.Create)
+		r.Get("/", noveltyHandler.GetByEmployeeAndMonth)
 	})
 
 	// Servidor

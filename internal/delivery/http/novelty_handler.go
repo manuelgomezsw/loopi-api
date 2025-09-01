@@ -36,7 +36,7 @@ func (h *NoveltyHandler) GetByEmployeeAndMonth(w http.ResponseWriter, r *http.Re
 	month, _ := strconv.Atoi(r.URL.Query().Get("month"))
 
 	if employeeID == 0 || year == 0 || month == 0 {
-		http.Error(w, "Missing parameters", http.StatusBadRequest)
+		BadRequest(w, "Missing parameters")
 		return
 	}
 
