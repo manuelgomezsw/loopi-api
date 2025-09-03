@@ -5,6 +5,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"log"
 	"loopi-api/config"
+	"loopi-api/internal/domain"
 	"loopi-api/internal/repository"
 )
 
@@ -25,7 +26,7 @@ func (a *authUseCase) Login(email, password string) (string, error) {
 	user, err := a.userRepo.FindByEmail(email)
 
 	if err != nil {
-		log.Println("error: %v", err)
+		log.Printf("error: %v\n", err)
 		return "", errors.New("invalid credentials")
 	}
 
@@ -36,7 +37,7 @@ func (a *authUseCase) Login(email, password string) (string, error) {
 	token, err := config.GenerateJWT(
 		user.UserID,
 		user.Email,
-		"none",
+		getRoles(user),
 		0,
 		1,
 	)
@@ -54,12 +55,9 @@ func (a *authUseCase) SelectContext(userID int, franchiseID, storeID int) (strin
 	}
 
 	// Validar que pertenece a la franquicia
-	var roleName string
 	found := false
-
 	for _, roles := range user.UserRoles {
 		if roles.FranchiseID == franchiseID {
-			roleName = roles.Role.Name
 			found = true
 			break
 		}
@@ -72,7 +70,7 @@ func (a *authUseCase) SelectContext(userID int, franchiseID, storeID int) (strin
 	token, err := config.GenerateJWT(
 		userID,
 		user.Email,
-		roleName,
+		getRoles(user),
 		franchiseID,
 		storeID,
 	)
@@ -81,4 +79,12 @@ func (a *authUseCase) SelectContext(userID int, franchiseID, storeID int) (strin
 	}
 
 	return token, nil
+}
+
+func getRoles(user *domain.User) []string {
+	roles := make([]string, 0)
+	for _, ur := range user.UserRoles {
+		roles = append(roles, ur.Role.Name)
+	}
+	return roles
 }

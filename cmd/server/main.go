@@ -69,6 +69,7 @@ func main() {
 
 	// Configurar router
 	r := chi.NewRouter()
+	r.Use(middleware.CORS)
 
 	// Rutas públicas
 	r.Route("/auth", func(r chi.Router) {
@@ -84,23 +85,31 @@ func main() {
 	// Rutas protegidas
 	r.Route("/franchises", func(r chi.Router) {
 		r.Use(middleware.JWTMiddleware)
-		r.Use(middleware.RequireRoles("admin"))
 
-		r.Post("/", franchiseHandler.Create)
 		r.Get("/", franchiseHandler.GetAll)
-		r.Get("/{id}", franchiseHandler.GetById)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRoles("admin"))
+
+			r.Get("/{id}", franchiseHandler.GetById)
+			r.Post("/", franchiseHandler.Create)
+		})
 	})
 
 	r.Route("/stores", func(r chi.Router) {
 		r.Use(middleware.JWTMiddleware)
-		r.Use(middleware.RequireRoles("admin"))
 
-		r.Get("/", storeHandler.GetAll)
-		r.Get("/{id}", storeHandler.GetByID)
 		r.Get("/franchise/{franchiseID}", storeHandler.GetByFranchiseID)
-		r.Post("/", storeHandler.Create)
-		r.Put("/{id}", storeHandler.Update)
-		r.Delete("/{id}", storeHandler.Delete)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRoles("admin"))
+
+			r.Get("/", storeHandler.GetAll)
+			r.Get("/{id}", storeHandler.GetByID)
+			r.Post("/", storeHandler.Create)
+			r.Put("/{id}", storeHandler.Update)
+			r.Delete("/{id}", storeHandler.Delete)
+		})
 	})
 
 	r.Route("/employees", func(r chi.Router) {

@@ -42,7 +42,7 @@ func JWTMiddleware(next http.Handler) http.Handler {
 
 		ctx := context.WithValue(r.Context(), ContextUserID, claims.UserID)
 		ctx = context.WithValue(ctx, ContextEmail, claims.Email)
-		ctx = context.WithValue(ctx, ContextRole, claims.Role)
+		ctx = context.WithValue(ctx, ContextRole, claims.Roles)
 		ctx = context.WithValue(ctx, ContextFranchiseID, claims.FranchiseID)
 		ctx = context.WithValue(ctx, ContextStore, claims.StoreID)
 

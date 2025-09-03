@@ -6,11 +6,11 @@ import (
 	"time"
 )
 
-func GenerateJWT(userID int, email, role string, franchiseID, storeID int) (string, error) {
+func GenerateJWT(userID int, email string, roles []string, franchiseID, storeID int) (string, error) {
 	claims := CustomClaims{
 		UserID:      userID,
 		Email:       email,
-		Role:        role,
+		Roles:       roles,
 		FranchiseID: franchiseID,
 		StoreID:     storeID,
 		RegisteredClaims: jwt.RegisteredClaims{
