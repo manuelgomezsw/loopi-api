@@ -23,6 +23,7 @@ func (h *ShiftHandler) Create(w http.ResponseWriter, r *http.Request) {
 		BadRequest(w, "Invalid request body")
 		return
 	}
+
 	if err := h.shiftUseCase.Create(req); err != nil {
 		BadRequest(w, err.Error())
 		return
