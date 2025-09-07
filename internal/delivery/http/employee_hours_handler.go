@@ -2,6 +2,7 @@ package http
 
 import (
 	"github.com/go-chi/chi/v5"
+	"loopi-api/internal/delivery/http/rest"
 	"loopi-api/internal/usecase"
 	"net/http"
 	"strconv"
@@ -20,7 +21,7 @@ func (h *EmployeeHoursHandler) GetMonthlySummary(w http.ResponseWriter, r *http.
 	employeeIDStr := chi.URLParam(r, "id")
 	employeeID, err := strconv.Atoi(employeeIDStr)
 	if err != nil || employeeID <= 0 {
-		BadRequest(w, "Invalid request body")
+		rest.BadRequest(w, "Invalid request body")
 		return
 	}
 	year := time.Now().Year()
@@ -39,9 +40,9 @@ func (h *EmployeeHoursHandler) GetMonthlySummary(w http.ResponseWriter, r *http.
 
 	summary, err := h.employeeHoursUseCase.GetMonthlySummary(employeeID, year, month)
 	if err != nil {
-		ServerError(w, err.Error())
+		rest.ServerError(w, err.Error())
 		return
 	}
 
-	OK(w, summary)
+	rest.OK(w, summary)
 }

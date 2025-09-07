@@ -117,7 +117,11 @@ func main() {
 		r.Use(middleware.RequireRoles("admin"))
 		r.Use(middleware.RequireFranchiseAccess())
 
+		r.Get("/", employeeHandler.GetAll)
+		r.Get("/{id}", employeeHandler.FindByID)
 		r.Post("/", employeeHandler.Create)
+		r.Put("/{id}", employeeHandler.Update)
+		r.Delete("/{id}", employeeHandler.Delete)
 	})
 
 	r.Route("/employee-hours", func(r chi.Router) {

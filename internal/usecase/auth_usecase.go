@@ -5,6 +5,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"log"
 	"loopi-api/config"
+	appErr "loopi-api/internal/common/errors"
 	"loopi-api/internal/domain"
 	"loopi-api/internal/repository"
 )
@@ -24,14 +25,17 @@ func NewAuthUseCase(userRepo repository.UserRepository) AuthUseCase {
 
 func (a *authUseCase) Login(email, password string) (string, error) {
 	user, err := a.userRepo.FindByEmail(email)
-
 	if err != nil {
 		log.Printf("error: %v\n", err)
-		return "", errors.New("invalid credentials")
+		return "", appErr.NewDomainError(500, err.Error())
+	}
+
+	if user == nil {
+		return "", ErrUserNotFound
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return "", errors.New("invalid credentials")
+		return "", ErrUserInvalidCredentials
 	}
 
 	token, err := config.GenerateJWT(
@@ -39,10 +43,10 @@ func (a *authUseCase) Login(email, password string) (string, error) {
 		user.Email,
 		getRoles(user),
 		0,
-		1,
+		0,
 	)
 	if err != nil {
-		return "", errors.New("could not generate token")
+		return "", ErrUserCouldNotGenerateToken
 	}
 
 	return token, nil

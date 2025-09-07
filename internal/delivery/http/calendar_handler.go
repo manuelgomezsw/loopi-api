@@ -2,6 +2,7 @@ package http
 
 import (
 	"loopi-api/internal/calendar"
+	"loopi-api/internal/delivery/http/rest"
 	"loopi-api/internal/usecase"
 	"net/http"
 	"strconv"
@@ -50,7 +51,7 @@ func (h *CalendarHandler) GetHolidays(w http.ResponseWriter, r *http.Request) {
 		result.Dates[i] = d.Format("2006-01-02")
 	}
 
-	OK(w, result)
+	rest.OK(w, result)
 }
 
 func (h *CalendarHandler) GetMonthSummary(w http.ResponseWriter, r *http.Request) {
@@ -106,10 +107,10 @@ func (h *CalendarHandler) GetMonthSummary(w http.ResponseWriter, r *http.Request
 	result.OrdinaryDays = adjustedOrdinary
 	result.Sundays = sundays
 
-	OK(w, result)
+	rest.OK(w, result)
 }
 
 func (h *CalendarHandler) ClearCache(w http.ResponseWriter, r *http.Request) {
 	calendar.ClearCalendarCache()
-	OK(w, map[string]string{"message": "Calendar cache cleared"})
+	rest.OK(w, map[string]string{"message": "Calendar cache cleared"})
 }

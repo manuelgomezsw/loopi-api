@@ -3,21 +3,21 @@ package domain
 type User struct {
 	BaseModel
 
-	UserID         int     `gorm:"column:id"`
-	FirstName      string  `gorm:"size:100;not null"`
-	LastName       string  `gorm:"size:100;not null"`
-	DocumentType   string  `gorm:"size:20;not null"`
-	DocumentNumber string  `gorm:"size:50;not null"`
-	Birthdate      string  `gorm:"not null"`
-	Phone          string  `gorm:"size:50;not null"`
-	Email          string  `gorm:"size:100;unique;not null"`
-	PasswordHash   string  `gorm:"size:255;not null"`
-	Position       string  `gorm:"size:100;not null"`
-	Salary         float64 `gorm:"not null"`
-	IsActive       bool    `gorm:"default:true"`
+	UserID         int     `gorm:"column:id" json:"user_id"`
+	FirstName      string  `gorm:"size:100;not null" json:"first_name"`
+	LastName       string  `gorm:"size:100;not null" json:"last_name"`
+	DocumentType   string  `gorm:"size:20;not null" json:"document_type"`
+	DocumentNumber string  `gorm:"size:50;not null" json:"document_number"`
+	Birthdate      string  `gorm:"not null" json:"birthdate"`
+	Phone          string  `gorm:"size:50;not null" json:"phone"`
+	Email          string  `gorm:"size:100;unique;not null" json:"email"`
+	PasswordHash   string  `gorm:"size:255;not null" json:"-"`
+	Position       string  `gorm:"size:100;not null" json:"position"`
+	Salary         float64 `gorm:"not null" json:"salary"`
+	IsActive       bool    `gorm:"default:true" json:"is_active"`
 
-	UserRoles  []UserRole
-	StoreUsers []StoreUser
+	UserRoles  []UserRole  `json:"-"`
+	StoreUsers []StoreUser `json:"-"`
 }
 
 type UserRole struct {

@@ -1,4 +1,4 @@
-package http
+package rest
 
 import (
 	"encoding/json"
@@ -52,4 +52,8 @@ func ServerError(w http.ResponseWriter, message string) {
 // NoContent (204)
 func NoContent(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func WriteError(w http.ResponseWriter, status int, message string) {
+	JSON(w, status, map[string]string{"error": message})
 }

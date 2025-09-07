@@ -2,10 +2,13 @@ package http
 
 import (
 	"encoding/json"
+	"github.com/go-chi/chi/v5"
 	"log"
+	"loopi-api/internal/delivery/http/rest"
 	"loopi-api/internal/domain"
 	"loopi-api/internal/usecase"
 	"net/http"
+	"strconv"
 )
 
 type EmployeeHandler struct {
@@ -31,10 +34,34 @@ var employeeRequest struct {
 	FranchiseID    int     `json:"franchise_id"`
 }
 
+func (h *EmployeeHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+	employees, err := h.employeeUseCase.GetAll()
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+	rest.OK(w, employees)
+}
+
+func (h *EmployeeHandler) FindByID(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		rest.HandleError(w, err)
+	}
+
+	employee, err := h.employeeUseCase.FindByID(id)
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, employee)
+}
+
 func (h *EmployeeHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&employeeRequest); err != nil {
-		log.Printf("❌ error: %v", err)
-		BadRequest(w, "Invalid input")
+		log.Printf("error: %v", err)
+		rest.BadRequest(w, "Invalid input")
 		return
 	}
 
@@ -51,10 +78,46 @@ func (h *EmployeeHandler) Create(w http.ResponseWriter, r *http.Request) {
 		PasswordHash:   employeeRequest.Password,
 	}
 
-	if err := h.employeeUseCase.CreateEmployee(user, employeeRequest.RoleID, employeeRequest.FranchiseID); err != nil {
-		ServerError(w, err.Error())
+	if err := h.employeeUseCase.Create(user, employeeRequest.RoleID, employeeRequest.FranchiseID); err != nil {
+		rest.HandleError(w, err)
 		return
 	}
 
-	Created(w, map[string]string{"message": "Employee created"})
+	rest.Created(w, map[string]string{"message": "Employee created"})
+}
+
+func (h *EmployeeHandler) Update(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		rest.HandleError(w, err)
+	}
+
+	var input domain.User
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		rest.BadRequest(w, "Invalid JSON")
+		return
+	}
+
+	input.ID = uint(id)
+
+	if err := h.employeeUseCase.Update(&input); err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, input)
+}
+
+func (h *EmployeeHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		rest.HandleError(w, err)
+	}
+
+	if err := h.employeeUseCase.Delete(id); err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.NoContent(w)
 }

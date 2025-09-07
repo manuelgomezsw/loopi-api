@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"loopi-api/internal/delivery/http/rest"
 	"loopi-api/internal/middleware"
 	"loopi-api/internal/usecase"
 	nethttp "net/http"
@@ -28,38 +29,38 @@ type contextRequest struct {
 func (h *AuthHandler) Login(w nethttp.ResponseWriter, r *nethttp.Request) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		BadRequest(w, "Invalid request body")
+		rest.BadRequest(w, "Invalid request body")
 		return
 	}
 
 	token, err := h.authUseCase.Login(req.Email, req.Password)
 	if err != nil {
-		Unauthorized(w, "Invalid credentials")
+		rest.Unauthorized(w, "Invalid credentials")
 		return
 	}
 
-	OK(w, map[string]string{"token": token})
+	rest.OK(w, map[string]string{"token": token})
 }
 
 func (h *AuthHandler) SelectContext(w nethttp.ResponseWriter, r *nethttp.Request) {
 	var req contextRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FranchiseID == 0 {
-		BadRequest(w, "Missing or invalid context information")
+		rest.BadRequest(w, "Missing or invalid context information")
 		return
 	}
 
 	userID := middleware.GetUserID(r.Context())
 	if userID == 0 {
-		Unauthorized(w, "Invalid token context")
+		rest.Unauthorized(w, "Invalid token context")
 		return
 	}
 
 	// Lógica de selección y verificación
 	token, err := h.authUseCase.SelectContext(userID, req.FranchiseID, req.StoreID)
 	if err != nil {
-		Forbidden(w, err.Error())
+		rest.Forbidden(w, err.Error())
 		return
 	}
 
-	OK(w, map[string]string{"token": token})
+	rest.OK(w, map[string]string{"token": token})
 }
