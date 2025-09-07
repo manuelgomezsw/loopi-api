@@ -84,6 +84,25 @@ func (r *userRepository) GetNameByID(userID int) (string, error) {
 	return fmt.Sprintf("%s %s", user.FirstName, user.LastName), nil
 }
 
+func (r *userRepository) GetByStore(storeID int) ([]domain.User, error) {
+	var users []domain.User
+
+	err := r.db.
+		Joins("JOIN store_users ON store_users.user_id = users.id").
+		Where("store_users.store_id = ?", storeID).
+		Find(&users).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(users) == 0 {
+		return []domain.User{}, nil
+	}
+
+	return users, err
+}
+
 func (r *userRepository) Create(user domain.User, roleID, franchiseID int) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&user).Error; err != nil {
@@ -98,8 +117,8 @@ func (r *userRepository) Create(user domain.User, roleID, franchiseID int) error
 	})
 }
 
-func (r *userRepository) Update(emp *domain.User) error {
-	return r.db.Save(emp).Error
+func (r *userRepository) Update(id int, fields map[string]interface{}) error {
+	return r.db.Model(&domain.User{}).Where("id = ?", id).Updates(fields).Error
 }
 
 func (r *userRepository) Delete(id int) error {

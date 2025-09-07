@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"github.com/go-chi/chi/v5"
 	"loopi-api/internal/delivery/http/rest"
 	"loopi-api/internal/domain"
 	"loopi-api/internal/middleware"
@@ -78,4 +79,21 @@ func (h *ShiftHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rest.OK(w, shift)
+}
+
+func (h *ShiftHandler) GetByStore(w http.ResponseWriter, r *http.Request) {
+	storeIDStr := chi.URLParam(r, "store_id")
+	storeID, err := strconv.Atoi(storeIDStr)
+	if err != nil {
+		rest.BadRequest(w, "invalid store_id")
+		return
+	}
+
+	shifts, err := h.shiftUseCase.GetByStore(storeID)
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, shifts)
 }

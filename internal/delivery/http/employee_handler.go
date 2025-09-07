@@ -43,6 +43,23 @@ func (h *EmployeeHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	rest.OK(w, employees)
 }
 
+func (h *EmployeeHandler) GetByStore(w http.ResponseWriter, r *http.Request) {
+	storeIDStr := chi.URLParam(r, "store_id")
+	storeID, err := strconv.Atoi(storeIDStr)
+	if err != nil {
+		rest.BadRequest(w, "invalid store_id")
+		return
+	}
+
+	users, err := h.employeeUseCase.GetByStore(storeID)
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, users)
+}
+
 func (h *EmployeeHandler) FindByID(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
@@ -87,25 +104,20 @@ func (h *EmployeeHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *EmployeeHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(chi.URLParam(r, "id"))
-	if err != nil {
-		rest.HandleError(w, err)
-	}
+	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
-	var input domain.User
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		rest.BadRequest(w, "Invalid JSON")
+	var updates map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		rest.BadRequest(w, "Invalid JSON body")
 		return
 	}
 
-	input.ID = uint(id)
-
-	if err := h.employeeUseCase.Update(&input); err != nil {
+	if err := h.employeeUseCase.Update(id, updates); err != nil {
 		rest.HandleError(w, err)
 		return
 	}
 
-	rest.OK(w, input)
+	rest.NoContent(w)
 }
 
 func (h *EmployeeHandler) Delete(w http.ResponseWriter, r *http.Request) {
