@@ -2,13 +2,14 @@ package http
 
 import (
 	"encoding/json"
-	"github.com/go-chi/chi/v5"
 	"log"
 	"loopi-api/internal/delivery/http/rest"
 	"loopi-api/internal/domain"
 	"loopi-api/internal/usecase"
 	"net/http"
 	"strconv"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type EmployeeHandler struct {
@@ -132,4 +133,32 @@ func (h *EmployeeHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rest.NoContent(w)
+}
+
+// GetActiveEmployees retrieves only active employees
+func (h *EmployeeHandler) GetActiveEmployees(w http.ResponseWriter, r *http.Request) {
+	employees, err := h.employeeUseCase.GetActiveEmployees()
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+	rest.OK(w, employees)
+}
+
+// GetByStoreAndActive retrieves active employees for a specific store
+func (h *EmployeeHandler) GetByStoreAndActive(w http.ResponseWriter, r *http.Request) {
+	storeIDStr := chi.URLParam(r, "store_id")
+	storeID, err := strconv.Atoi(storeIDStr)
+	if err != nil {
+		rest.BadRequest(w, "invalid store_id")
+		return
+	}
+
+	employees, err := h.employeeUseCase.GetByStoreAndActive(storeID)
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, employees)
 }
