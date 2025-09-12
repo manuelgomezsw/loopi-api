@@ -3,6 +3,7 @@ package base
 import (
 	"fmt"
 	"log"
+	"maps"
 	"time"
 )
 
@@ -144,7 +145,7 @@ func (l *Logger) createLogEntry(logType string, operation string, status string,
 		timestamp, logType, l.entityName, operation, status)
 
 	// Add metadata
-	if metadata != nil && len(metadata) > 0 {
+	if len(metadata) > 0 {
 		metadataStr := " Metadata={"
 		first := true
 		for key, value := range metadata {
@@ -192,16 +193,10 @@ func (lm *LoggerWithMetadata) mergeMetadata(additional map[string]interface{}) m
 	merged := make(map[string]interface{})
 
 	// Copy pre-set metadata
-	for k, v := range lm.metadata {
-		merged[k] = v
-	}
+	maps.Copy(merged, lm.metadata)
 
 	// Add additional metadata (overwrites pre-set if same key)
-	if additional != nil {
-		for k, v := range additional {
-			merged[k] = v
-		}
-	}
+	maps.Copy(merged, additional)
 
 	return merged
 }

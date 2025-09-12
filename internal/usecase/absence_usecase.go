@@ -2,10 +2,11 @@ package usecase
 
 import (
 	"fmt"
+	"time"
+
 	"loopi-api/internal/domain"
 	"loopi-api/internal/repository"
 	"loopi-api/internal/usecase/base"
-	"time"
 )
 
 type AbsenceUseCase interface {
