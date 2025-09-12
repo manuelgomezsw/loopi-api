@@ -1,43 +1,181 @@
 package mysql
 
 import (
-	"gorm.io/gorm"
 	"loopi-api/internal/domain"
 	"loopi-api/internal/repository"
+
+	"gorm.io/gorm"
 )
 
+// shiftRepository implements repository.ShiftRepository with improved maintainability
 type shiftRepository struct {
-	db *gorm.DB
+	*BaseRepository[domain.Shift]
+	errorHandler *ErrorHandler
 }
 
+// NewShiftRepository creates a new shift repository with enhanced features
 func NewShiftRepository(db *gorm.DB) repository.ShiftRepository {
-	return &shiftRepository{db: db}
+	return &shiftRepository{
+		BaseRepository: NewBaseRepository[domain.Shift](db, "shifts"),
+		errorHandler:   NewErrorHandler("shifts"),
+	}
 }
 
-func (r *shiftRepository) Create(cfg domain.Shift) error {
-	return r.db.Create(&cfg).Error
+// Create creates a new shift with validation and error handling
+func (r *shiftRepository) Create(shift domain.Shift) error {
+	// Business validation before creation
+	if err := r.validateShift(&shift); err != nil {
+		return r.errorHandler.HandleError("Create", err)
+	}
+
+	if err := r.BaseRepository.Create(&shift); err != nil {
+		return r.errorHandler.HandleError("Create", err)
+	}
+	return nil
 }
 
+// ListAll retrieves all shifts with proper ordering and error handling
 func (r *shiftRepository) ListAll() ([]domain.Shift, error) {
 	var shifts []domain.Shift
-	err := r.db.Order("name").Find(&shifts).Error
-	return shifts, err
+	err := NewQueryBuilder(r.GetDB()).
+		OrderBy("name").
+		GetDB().
+		Find(&shifts).Error
+
+	if err != nil {
+		return nil, r.errorHandler.HandleError("ListAll", err)
+	}
+	return shifts, nil
 }
 
+// ListByStore retrieves shifts by store ID with proper ordering
 func (r *shiftRepository) ListByStore(storeID int) ([]domain.Shift, error) {
 	var shifts []domain.Shift
-	err := r.db.
-		Where("store_id = ?", storeID).
-		Order("name").
+	err := NewQueryBuilder(r.GetDB()).
+		WhereEquals("store_id", storeID).
+		OrderBy("name").
+		GetDB().
 		Find(&shifts).Error
-	return shifts, err
+
+	if err != nil {
+		return nil, r.errorHandler.HandleError("ListByStore", err, storeID)
+	}
+	return shifts, nil
 }
 
+// GetByID retrieves a shift by ID with proper error handling
 func (r *shiftRepository) GetByID(id int) (*domain.Shift, error) {
-	var shift domain.Shift
-	err := r.db.First(&shift, id).Error
+	shift, err := r.BaseRepository.GetByID(id)
 	if err != nil {
-		return nil, err
+		if err == ErrNotFound {
+			return nil, r.errorHandler.HandleNotFound("GetByID", id)
+		}
+		return nil, r.errorHandler.HandleError("GetByID", err, id)
 	}
-	return &shift, nil
+	return shift, nil
+}
+
+// validateShift performs business validation
+func (r *shiftRepository) validateShift(shift *domain.Shift) error {
+	if shift.Name == "" {
+		return ErrInvalidInput
+	}
+	if shift.Period == "" {
+		return ErrInvalidInput
+	}
+	if shift.StartTime == "" {
+		return ErrInvalidInput
+	}
+	if shift.EndTime == "" {
+		return ErrInvalidInput
+	}
+	if shift.StoreID <= 0 {
+		return ErrInvalidInput
+	}
+	return nil
+}
+
+// GetActiveShiftsByStore retrieves only active shifts for a store
+func (r *shiftRepository) GetActiveShiftsByStore(storeID int) ([]domain.Shift, error) {
+	var shifts []domain.Shift
+	err := NewQueryBuilder(r.GetDB()).
+		WhereEquals("store_id", storeID).
+		WhereActive().
+		WhereNotDeleted().
+		OrderBy("name").
+		GetDB().
+		Find(&shifts).Error
+
+	if err != nil {
+		return nil, r.errorHandler.HandleError("GetActiveShiftsByStore", err, storeID)
+	}
+	return shifts, nil
+}
+
+// GetShiftsByPeriod retrieves shifts by period (morning, afternoon, night)
+func (r *shiftRepository) GetShiftsByPeriod(period string) ([]domain.Shift, error) {
+	var shifts []domain.Shift
+	err := NewQueryBuilder(r.GetDB()).
+		WhereEquals("period", period).
+		WhereActive().
+		OrderBy("start_time").
+		GetDB().
+		Find(&shifts).Error
+
+	if err != nil {
+		return nil, r.errorHandler.HandleError("GetShiftsByPeriod", err)
+	}
+	return shifts, nil
+}
+
+// GetShiftStatistics retrieves comprehensive shift statistics for a store
+func (r *shiftRepository) GetShiftStatistics(storeID int) (*ShiftStatistics, error) {
+	var stats ShiftStatistics
+
+	// Use transaction for consistency
+	err := r.BaseRepository.Transaction(func(tx *gorm.DB) error {
+		// Count total shifts
+		if err := tx.Model(&domain.Shift{}).
+			Where("store_id = ?", storeID).
+			Count(&stats.TotalShifts).Error; err != nil {
+			return err
+		}
+
+		// Count active shifts
+		if err := tx.Model(&domain.Shift{}).
+			Where("store_id = ? AND is_active = ?", storeID, true).
+			Count(&stats.ActiveShifts).Error; err != nil {
+			return err
+		}
+
+		// Get shifts by period
+		if err := tx.Model(&domain.Shift{}).
+			Select("period, COUNT(*) as count").
+			Where("store_id = ? AND is_active = ?", storeID, true).
+			Group("period").
+			Scan(&stats.ShiftsByPeriod).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, r.errorHandler.HandleError("GetShiftStatistics", err, storeID)
+	}
+
+	return &stats, nil
+}
+
+// ShiftStatistics represents comprehensive shift statistics
+type ShiftStatistics struct {
+	TotalShifts    int64              `json:"total_shifts"`
+	ActiveShifts   int64              `json:"active_shifts"`
+	ShiftsByPeriod []ShiftPeriodCount `json:"shifts_by_period"`
+}
+
+// ShiftPeriodCount represents shift count by period
+type ShiftPeriodCount struct {
+	Period string `json:"period"`
+	Count  int64  `json:"count"`
 }

@@ -1,7 +1,7 @@
 package domain
 
 type Franchise struct {
-	BaseModel
+	BaseEntity
 
 	Name     string `json:"name" gorm:"size:100;not null"`
 	IsActive bool   `json:"is_active" gorm:"default:true"`

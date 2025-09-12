@@ -2,12 +2,13 @@ package usecase
 
 import (
 	"errors"
-	"golang.org/x/crypto/bcrypt"
 	"log"
 	"loopi-api/config"
 	appErr "loopi-api/internal/common/errors"
 	"loopi-api/internal/domain"
 	"loopi-api/internal/repository"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthUseCase interface {
@@ -39,7 +40,7 @@ func (a *authUseCase) Login(email, password string) (string, error) {
 	}
 
 	token, err := config.GenerateJWT(
-		user.UserID,
+		int(user.ID),
 		user.Email,
 		getRoles(user),
 		0,

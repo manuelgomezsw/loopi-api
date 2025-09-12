@@ -1,10 +1,10 @@
 package domain
 
 type Permission struct {
-	BaseModel
+	BaseEntity
 
-	Name        string `gorm:"size:100;unique;not null"`
-	Description string
+	Name        string `gorm:"size:100;unique;not null" json:"name"`
+	Description string `json:"description"`
 
-	RolePermissions []RolePermission
+	RolePermissions []RolePermission `json:"-"`
 }

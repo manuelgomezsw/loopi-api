@@ -1,9 +1,8 @@
 package domain
 
 type User struct {
-	BaseModel
+	BaseEntity
 
-	UserID         int     `gorm:"column:id" json:"user_id"`
 	FirstName      string  `gorm:"size:100;not null" json:"first_name"`
 	LastName       string  `gorm:"size:100;not null" json:"last_name"`
 	DocumentType   string  `gorm:"size:20;not null" json:"document_type"`
@@ -21,6 +20,8 @@ type User struct {
 }
 
 type UserRole struct {
+	TimestampOnlyEntity
+
 	UserID      int `gorm:"primaryKey"`
 	RoleID      int `gorm:"primaryKey"`
 	FranchiseID int `gorm:"primaryKey"`

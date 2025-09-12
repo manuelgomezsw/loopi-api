@@ -1,7 +1,8 @@
 package domain
 
 type Shift struct {
-	ID           uint   `gorm:"primaryKey" json:"id"`
+	BaseEntity
+
 	StoreID      int    `gorm:"column:store_id;not null" json:"store_id"`
 	Name         string `json:"name"`
 	Period       string `json:"period"` // weekly, biweekly, monthly
