@@ -1,0 +1,1229 @@
+{
+	"info": {
+		"_postman_id": "loopi-api-collections",
+		"name": "Loopi API - Colecciones Completas",
+		"description": "Colecciones de Postman para probar todos los endpoints de la API Loopi",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "franchiseId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "storeId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "employeeId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "shiftId",
+			"value": "1",
+			"type": "string"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "🔐 Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('token', response.token);",
+									"    console.log('Token guardado: ' + response.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@example.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "login"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Select Context",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"franchise_id\": {{franchiseId}},\n    \"store_id\": {{storeId}}\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/context",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "context"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🏢 Franchises",
+			"item": [
+				{
+					"name": "Get All Franchises",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/franchises/",
+							"host": ["{{baseUrl}}"],
+							"path": ["franchises", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Franchise by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/franchises/{{franchiseId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["franchises", "{{franchiseId}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Franchise",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Nueva Franquicia\",\n    \"description\": \"Descripción de la franquicia\",\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/franchises/",
+							"host": ["{{baseUrl}}"],
+							"path": ["franchises", ""]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🏪 Stores",
+			"item": [
+				{
+					"name": "Get All Stores",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/stores/",
+							"host": ["{{baseUrl}}"],
+							"path": ["stores", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Store by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/stores/{{storeId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["stores", "{{storeId}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Stores by Franchise",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/stores/franchise/{{franchiseId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["stores", "franchise", "{{franchiseId}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Active Stores by Franchise",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/stores/franchise/{{franchiseId}}/active",
+							"host": ["{{baseUrl}}"],
+							"path": ["stores", "franchise", "{{franchiseId}}", "active"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Store",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Nueva Tienda\",\n    \"address\": \"Dirección de la tienda\",\n    \"franchise_id\": {{franchiseId}},\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/stores/",
+							"host": ["{{baseUrl}}"],
+							"path": ["stores", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Store",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Tienda Actualizada\",\n    \"address\": \"Nueva dirección\",\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/stores/{{storeId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["stores", "{{storeId}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Store",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/stores/{{storeId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["stores", "{{storeId}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Stores with Employee Count",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/stores/with-employee-count",
+							"host": ["{{baseUrl}}"],
+							"path": ["stores", "with-employee-count"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Store Statistics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/stores/statistics",
+							"host": ["{{baseUrl}}"],
+							"path": ["stores", "statistics"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "👥 Employees",
+			"item": [
+				{
+					"name": "Get All Employees",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/employees/",
+							"host": ["{{baseUrl}}"],
+							"path": ["employees", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Employee by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/employees/{{employeeId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["employees", "{{employeeId}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Active Employees",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/employees/active",
+							"host": ["{{baseUrl}}"],
+							"path": ["employees", "active"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Employees by Store",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/employees/store/{{storeId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["employees", "store", "{{storeId}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Active Employees by Store",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/employees/store/{{storeId}}/active",
+							"host": ["{{baseUrl}}"],
+							"path": ["employees", "store", "{{storeId}}", "active"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Employee",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"first_name\": \"Juan\",\n    \"last_name\": \"Pérez\",\n    \"document_type\": \"CC\",\n    \"document_number\": \"12345678\",\n    \"birthdate\": \"1990-01-01\",\n    \"phone\": \"3001234567\",\n    \"email\": \"juan.perez@example.com\",\n    \"position\": \"Vendedor\",\n    \"password\": \"password123\",\n    \"salary\": 1200000,\n    \"role_id\": 2,\n    \"franchise_id\": {{franchiseId}}\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/employees/",
+							"host": ["{{baseUrl}}"],
+							"path": ["employees", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Employee",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"first_name\": \"Juan Carlos\",\n    \"salary\": 1300000,\n    \"position\": \"Supervisor\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/employees/{{employeeId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["employees", "{{employeeId}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Employee",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/employees/{{employeeId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["employees", "{{employeeId}}"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "⏰ Employee Hours",
+			"item": [
+				{
+					"name": "Get Monthly Hours Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/employee-hours/{{employeeId}}/monthly?year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["employee-hours", "{{employeeId}}", "monthly"],
+							"query": [
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Daily Hours Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/employee-hours/{{employeeId}}/daily?year=2025&month=1&day=15",
+							"host": ["{{baseUrl}}"],
+							"path": ["employee-hours", "{{employeeId}}", "daily"],
+							"query": [
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								},
+								{
+									"key": "day",
+									"value": "15"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Yearly Hours Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/employee-hours/{{employeeId}}/yearly?year=2025",
+							"host": ["{{baseUrl}}"],
+							"path": ["employee-hours", "{{employeeId}}", "yearly"],
+							"query": [
+								{
+									"key": "year",
+									"value": "2025"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Working Days",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/employee-hours/{{employeeId}}/working-days?year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["employee-hours", "{{employeeId}}", "working-days"],
+							"query": [
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Monthly Summary (Legacy)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/employee-hours/{{employeeId}}?year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["employee-hours", "{{employeeId}}"],
+							"query": [
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "📅 Calendar",
+			"item": [
+				{
+					"name": "Get Holidays (All Year)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/calendar/holidays?year=2025",
+							"host": ["{{baseUrl}}"],
+							"path": ["calendar", "holidays"],
+							"query": [
+								{
+									"key": "year",
+									"value": "2025"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Holidays by Month",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/calendar/holidays?year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["calendar", "holidays"],
+							"query": [
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Month Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/calendar/month-summary?year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["calendar", "month-summary"],
+							"query": [
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Enhanced Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/calendar/enhanced-summary?year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["calendar", "enhanced-summary"],
+							"query": [
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Working Days",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/calendar/working-days?year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["calendar", "working-days"],
+							"query": [
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Clear Cache",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/calendar/clear-cache",
+							"host": ["{{baseUrl}}"],
+							"path": ["calendar", "clear-cache"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🔄 Shifts",
+			"item": [
+				{
+					"name": "Create Shift",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"employee_id\": {{employeeId}},\n    \"store_id\": {{storeId}},\n    \"shift_date\": \"2025-01-15\",\n    \"start_time\": \"08:00:00\",\n    \"end_time\": \"17:00:00\",\n    \"description\": \"Turno regular\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/shifts/",
+							"host": ["{{baseUrl}}"],
+							"path": ["shifts", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Shifts",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/shifts/",
+							"host": ["{{baseUrl}}"],
+							"path": ["shifts", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Shifts by Store",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/shifts/?store={{storeId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["shifts", ""],
+							"query": [
+								{
+									"key": "store",
+									"value": "{{storeId}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Active Shifts by Store",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/shifts/?store={{storeId}}&active=true",
+							"host": ["{{baseUrl}}"],
+							"path": ["shifts", ""],
+							"query": [
+								{
+									"key": "store",
+									"value": "{{storeId}}"
+								},
+								{
+									"key": "active",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Shifts by Period",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/shifts/?period=2025-01",
+							"host": ["{{baseUrl}}"],
+							"path": ["shifts", ""],
+							"query": [
+								{
+									"key": "period",
+									"value": "2025-01"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Single Shift",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/shifts/single?id={{shiftId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["shifts", "single"],
+							"query": [
+								{
+									"key": "id",
+									"value": "{{shiftId}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Shifts by Store (Path)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/shifts/store/{{storeId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["shifts", "store", "{{storeId}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Shift Statistics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/shifts/store/{{storeId}}/statistics",
+							"host": ["{{baseUrl}}"],
+							"path": ["shifts", "store", "{{storeId}}", "statistics"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Shifts by Period (Path)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/shifts/period",
+							"host": ["{{baseUrl}}"],
+							"path": ["shifts", "period"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "📊 Shift Planning",
+			"item": [
+				{
+					"name": "Preview Shift Projection",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"shift_id\": {{shiftId}},\n    \"year\": 2025,\n    \"month\": 1\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/shift-planning/preview",
+							"host": ["{{baseUrl}}"],
+							"path": ["shift-planning", "preview"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Projection Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/shift-planning/summary?shift_id={{shiftId}}&year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["shift-planning", "summary"],
+							"query": [
+								{
+									"key": "shift_id",
+									"value": "{{shiftId}}"
+								},
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Projected Days",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/shift-planning/projected-days?shift_id={{shiftId}}&year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["shift-planning", "projected-days"],
+							"query": [
+								{
+									"key": "shift_id",
+									"value": "{{shiftId}}"
+								},
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🚫 Absences",
+			"item": [
+				{
+					"name": "Create Absence",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"employee_id\": {{employeeId}},\n    \"absence_date\": \"2025-01-15\",\n    \"start_time\": \"08:00:00\",\n    \"end_time\": \"12:00:00\",\n    \"reason\": \"Cita médica\",\n    \"description\": \"Consulta médica general\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/absences/",
+							"host": ["{{baseUrl}}"],
+							"path": ["absences", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Absences by Employee and Month",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/absences/monthly?employee={{employeeId}}&year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["absences", "monthly"],
+							"query": [
+								{
+									"key": "employee",
+									"value": "{{employeeId}}"
+								},
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Absences by Date Range",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/absences/date-range?employee={{employeeId}}&from=2025-01-01&to=2025-01-31",
+							"host": ["{{baseUrl}}"],
+							"path": ["absences", "date-range"],
+							"query": [
+								{
+									"key": "employee",
+									"value": "{{employeeId}}"
+								},
+								{
+									"key": "from",
+									"value": "2025-01-01"
+								},
+								{
+									"key": "to",
+									"value": "2025-01-31"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Total Absence Hours",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/absences/total-hours?employee={{employeeId}}&year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["absences", "total-hours"],
+							"query": [
+								{
+									"key": "employee",
+									"value": "{{employeeId}}"
+								},
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Absences (Legacy)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/absences/?employee={{employeeId}}&year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["absences", ""],
+							"query": [
+								{
+									"key": "employee",
+									"value": "{{employeeId}}"
+								},
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🎯 Novelties",
+			"item": [
+				{
+					"name": "Create Novelty",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"employee_id\": {{employeeId}},\n    \"novelty_date\": \"2025-01-15\",\n    \"novelty_type\": \"overtime\",\n    \"start_time\": \"18:00:00\",\n    \"end_time\": \"20:00:00\",\n    \"description\": \"Horas extra por evento especial\",\n    \"hours\": 2\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/novelties/",
+							"host": ["{{baseUrl}}"],
+							"path": ["novelties", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Novelties by Employee and Month",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/novelties/monthly?employee={{employeeId}}&year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["novelties", "monthly"],
+							"query": [
+								{
+									"key": "employee",
+									"value": "{{employeeId}}"
+								},
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Novelties by Date Range",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/novelties/date-range?employee={{employeeId}}&from=2025-01-01&to=2025-01-31",
+							"host": ["{{baseUrl}}"],
+							"path": ["novelties", "date-range"],
+							"query": [
+								{
+									"key": "employee",
+									"value": "{{employeeId}}"
+								},
+								{
+									"key": "from",
+									"value": "2025-01-01"
+								},
+								{
+									"key": "to",
+									"value": "2025-01-31"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Total Hours by Type",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/novelties/total-hours-by-type?employee={{employeeId}}&year=2025&month=1&type=overtime",
+							"host": ["{{baseUrl}}"],
+							"path": ["novelties", "total-hours-by-type"],
+							"query": [
+								{
+									"key": "employee",
+									"value": "{{employeeId}}"
+								},
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								},
+								{
+									"key": "type",
+									"value": "overtime"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Types Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/novelties/types-summary?employee={{employeeId}}&year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["novelties", "types-summary"],
+							"query": [
+								{
+									"key": "employee",
+									"value": "{{employeeId}}"
+								},
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Novelties (Legacy)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/novelties/?employee={{employeeId}}&year=2025&month=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["novelties", ""],
+							"query": [
+								{
+									"key": "employee",
+									"value": "{{employeeId}}"
+								},
+								{
+									"key": "year",
+									"value": "2025"
+								},
+								{
+									"key": "month",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

@@ -1,0 +1,81 @@
+{
+	"info": {
+		"name": "Loopi API - Franchises",
+		"description": "Endpoints de franquicias para la API Loopi",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "franchiseId",
+			"value": "1",
+			"type": "string"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Get All Franchises",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/franchises/",
+					"host": ["{{baseUrl}}"],
+					"path": ["franchises", ""]
+				}
+			}
+		},
+		{
+			"name": "Get Franchise by ID",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/franchises/{{franchiseId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["franchises", "{{franchiseId}}"]
+				}
+			}
+		},
+		{
+			"name": "Create Franchise",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Nueva Franquicia\",\n    \"description\": \"Descripción de la franquicia\",\n    \"is_active\": true\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/franchises/",
+					"host": ["{{baseUrl}}"],
+					"path": ["franchises", ""]
+				}
+			}
+		}
+	]
+}

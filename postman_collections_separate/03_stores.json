@@ -1,0 +1,167 @@
+{
+	"info": {
+		"name": "Loopi API - Stores",
+		"description": "Endpoints de tiendas para la API Loopi",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "franchiseId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "storeId",
+			"value": "1",
+			"type": "string"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Get All Stores",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/stores/",
+					"host": ["{{baseUrl}}"],
+					"path": ["stores", ""]
+				}
+			}
+		},
+		{
+			"name": "Get Store by ID",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/stores/{{storeId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["stores", "{{storeId}}"]
+				}
+			}
+		},
+		{
+			"name": "Get Stores by Franchise",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/stores/franchise/{{franchiseId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["stores", "franchise", "{{franchiseId}}"]
+				}
+			}
+		},
+		{
+			"name": "Get Active Stores by Franchise",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/stores/franchise/{{franchiseId}}/active",
+					"host": ["{{baseUrl}}"],
+					"path": ["stores", "franchise", "{{franchiseId}}", "active"]
+				}
+			}
+		},
+		{
+			"name": "Create Store",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Nueva Tienda\",\n    \"address\": \"Dirección de la tienda\",\n    \"franchise_id\": {{franchiseId}},\n    \"is_active\": true\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/stores/",
+					"host": ["{{baseUrl}}"],
+					"path": ["stores", ""]
+				}
+			}
+		},
+		{
+			"name": "Update Store",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Tienda Actualizada\",\n    \"address\": \"Nueva dirección\",\n    \"is_active\": true\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/stores/{{storeId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["stores", "{{storeId}}"]
+				}
+			}
+		},
+		{
+			"name": "Delete Store",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/stores/{{storeId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["stores", "{{storeId}}"]
+				}
+			}
+		},
+		{
+			"name": "Get Stores with Employee Count",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/stores/with-employee-count",
+					"host": ["{{baseUrl}}"],
+					"path": ["stores", "with-employee-count"]
+				}
+			}
+		},
+		{
+			"name": "Get Store Statistics",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/stores/statistics",
+					"host": ["{{baseUrl}}"],
+					"path": ["stores", "statistics"]
+				}
+			}
+		}
+	]
+}
