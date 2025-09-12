@@ -26,7 +26,7 @@ func (h *ShiftProjectionHandler) Preview(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.shiftProjectionUseCase.PreviewHours(req)
 	if err != nil {
-		rest.BadRequest(w, err.Error())
+		rest.HandleError(w, err)
 		return
 	}
 

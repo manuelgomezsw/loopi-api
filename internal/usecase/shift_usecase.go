@@ -1,41 +1,406 @@
 package usecase
 
 import (
-	"errors"
+	"fmt"
 	"loopi-api/internal/domain"
 	"loopi-api/internal/repository"
+	"loopi-api/internal/usecase/base"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type ShiftUseCase interface {
-	Create(cfg domain.Shift) error
+	// Standard CRUD operations
 	GetAll() ([]domain.Shift, error)
-	GetByStore(storeID int) ([]domain.Shift, error)
 	GetByID(id int) (*domain.Shift, error)
+	GetByStore(storeID int) ([]domain.Shift, error)
+	Create(shift domain.Shift) error
+
+	// Business-specific operations
+	GetActiveShiftsByStore(storeID int) ([]domain.Shift, error)
+	GetShiftsByPeriod(period string) ([]domain.Shift, error)
+	ValidateShiftData(shift *domain.Shift) error
+	ValidateShiftTiming(shift *domain.Shift) error
+	GetShiftStatistics(storeID int) (*repository.ShiftStatistics, error)
 }
 
 type shiftUseCase struct {
-	repo repository.ShiftRepository
+	repo         repository.ShiftRepository
+	errorHandler *base.ErrorHandler
+	validator    *base.Validator
+	logger       *base.Logger
 }
 
 func NewShiftUseCase(repo repository.ShiftRepository) ShiftUseCase {
-	return &shiftUseCase{repo: repo}
-}
-
-func (u *shiftUseCase) Create(cfg domain.Shift) error {
-	if cfg.Name == "" || cfg.Period == "" || cfg.StartTime == "" || cfg.EndTime == "" {
-		return errors.New("missing required fields")
+	return &shiftUseCase{
+		repo:         repo,
+		errorHandler: base.NewErrorHandler("Shift"),
+		validator:    base.NewValidator(),
+		logger:       base.NewLogger("Shift"),
 	}
-	return u.repo.Create(cfg)
 }
 
-func (u *shiftUseCase) GetAll() ([]domain.Shift, error) {
-	return u.repo.ListAll()
+// ✅ Enhanced CRUD operations with logging, validation, and error handling
+
+// GetAll retrieves all shifts with proper error handling and logging
+func (uc *shiftUseCase) GetAll() ([]domain.Shift, error) {
+	uc.logger.LogOperation("GetAll", "start", nil)
+
+	shifts, err := uc.repo.ListAll()
+	if err != nil {
+		uc.logger.LogError("GetAll", err, nil)
+		return nil, uc.errorHandler.HandleRepositoryError("GetAll", err)
+	}
+
+	if len(shifts) == 0 {
+		uc.logger.LogOperation("GetAll", "no_shifts_found", nil)
+		return nil, uc.errorHandler.HandleNotFound("GetAll", "No shifts found")
+	}
+
+	uc.logger.LogOperation("GetAll", "success", map[string]interface{}{
+		"count": len(shifts),
+	})
+
+	return shifts, nil
 }
 
-func (u *shiftUseCase) GetByStore(storeID int) ([]domain.Shift, error) {
-	return u.repo.ListByStore(storeID)
+// GetByID retrieves a shift by ID with validation and error handling
+func (uc *shiftUseCase) GetByID(id int) (*domain.Shift, error) {
+	uc.logger.LogOperation("GetByID", "start", map[string]interface{}{"id": id})
+
+	// Validate ID
+	if err := uc.validator.ValidateID(id); err != nil {
+		uc.logger.LogError("GetByID", err, map[string]interface{}{"id": id})
+		return nil, uc.errorHandler.HandleValidationError("GetByID", err)
+	}
+
+	shift, err := uc.repo.GetByID(id)
+	if err != nil {
+		uc.logger.LogError("GetByID", err, map[string]interface{}{"id": id})
+		return nil, uc.errorHandler.HandleRepositoryError("GetByID", err)
+	}
+
+	uc.logger.LogOperation("GetByID", "success", map[string]interface{}{"id": id})
+	return shift, nil
 }
 
-func (u *shiftUseCase) GetByID(id int) (*domain.Shift, error) {
-	return u.repo.GetByID(id)
+// GetByStore retrieves shifts by store ID with validation and error handling
+func (uc *shiftUseCase) GetByStore(storeID int) ([]domain.Shift, error) {
+	uc.logger.LogOperation("GetByStore", "start", map[string]interface{}{"store_id": storeID})
+
+	// Validate store ID
+	if err := uc.validator.ValidateID(storeID); err != nil {
+		uc.logger.LogError("GetByStore", err, map[string]interface{}{"store_id": storeID})
+		return nil, uc.errorHandler.HandleValidationError("GetByStore", err)
+	}
+
+	shifts, err := uc.repo.ListByStore(storeID)
+	if err != nil {
+		uc.logger.LogError("GetByStore", err, map[string]interface{}{"store_id": storeID})
+		return nil, uc.errorHandler.HandleRepositoryError("GetByStore", err)
+	}
+
+	uc.logger.LogOperation("GetByStore", "success", map[string]interface{}{
+		"store_id": storeID,
+		"count":    len(shifts),
+	})
+
+	return shifts, nil
+}
+
+// Create creates a new shift with validation and business rules
+func (uc *shiftUseCase) Create(shift domain.Shift) error {
+	uc.logger.LogOperation("Create", "start", map[string]interface{}{
+		"shift_name": shift.Name,
+		"store_id":   shift.StoreID,
+	})
+
+	// Validate business rules
+	if err := uc.ValidateShiftData(&shift); err != nil {
+		return err
+	}
+
+	// Validate shift timing
+	if err := uc.ValidateShiftTiming(&shift); err != nil {
+		return err
+	}
+
+	// Set default values (business rule)
+	shift.IsActive = true
+
+	// Execute creation
+	if err := uc.repo.Create(shift); err != nil {
+		uc.logger.LogError("Create", err, map[string]interface{}{
+			"shift_name": shift.Name,
+			"store_id":   shift.StoreID,
+		})
+		return uc.errorHandler.HandleRepositoryError("Create", err)
+	}
+
+	uc.logger.LogOperation("Create", "success", map[string]interface{}{
+		"shift_id":   shift.ID,
+		"shift_name": shift.Name,
+		"store_id":   shift.StoreID,
+	})
+
+	return nil
+}
+
+// ✅ Business-specific operations with enhanced features
+
+// GetActiveShiftsByStore retrieves only active shifts for a store with business rule filtering
+func (uc *shiftUseCase) GetActiveShiftsByStore(storeID int) ([]domain.Shift, error) {
+	// Start performance timer
+	timer := uc.logger.StartTimer("GetActiveShiftsByStore", map[string]interface{}{"store_id": storeID})
+	defer timer.Stop()
+
+	// Validate store ID
+	if err := uc.validator.ValidateID(storeID); err != nil {
+		uc.logger.LogError("GetActiveShiftsByStore", err, map[string]interface{}{"store_id": storeID})
+		return nil, uc.errorHandler.HandleValidationError("GetActiveShiftsByStore", err)
+	}
+
+	// Get all shifts for the store
+	shifts, err := uc.repo.ListByStore(storeID)
+	if err != nil {
+		uc.logger.LogError("GetActiveShiftsByStore", err, map[string]interface{}{"store_id": storeID})
+		return nil, uc.errorHandler.HandleRepositoryError("GetActiveShiftsByStore", err)
+	}
+
+	// Apply business rule: filter only active shifts
+	activeShifts := make([]domain.Shift, 0)
+	for _, shift := range shifts {
+		if shift.IsActive {
+			activeShifts = append(activeShifts, shift)
+		}
+	}
+
+	uc.logger.LogBusinessRule("GetActiveShiftsByStore", "filter_active_only", "applied", map[string]interface{}{
+		"store_id":      storeID,
+		"total_shifts":  len(shifts),
+		"active_shifts": len(activeShifts),
+	})
+
+	uc.logger.LogOperation("GetActiveShiftsByStore", "success", map[string]interface{}{
+		"store_id":     storeID,
+		"active_count": len(activeShifts),
+	})
+
+	return activeShifts, nil
+}
+
+// GetShiftsByPeriod retrieves shifts by period with validation
+func (uc *shiftUseCase) GetShiftsByPeriod(period string) ([]domain.Shift, error) {
+	uc.logger.LogOperation("GetShiftsByPeriod", "start", map[string]interface{}{"period": period})
+
+	// Validate period
+	validPeriods := []string{"morning", "afternoon", "night", "weekly", "biweekly", "monthly"}
+	isValidPeriod := false
+	for _, validPeriod := range validPeriods {
+		if period == validPeriod {
+			isValidPeriod = true
+			break
+		}
+	}
+
+	if !isValidPeriod {
+		err := fmt.Errorf("invalid period: %s. Valid periods are: %s", period, strings.Join(validPeriods, ", "))
+		uc.logger.LogError("GetShiftsByPeriod", err, map[string]interface{}{"period": period})
+		return nil, uc.errorHandler.HandleValidationError("GetShiftsByPeriod", err)
+	}
+
+	// Get all shifts and filter by period
+	allShifts, err := uc.repo.ListAll()
+	if err != nil {
+		uc.logger.LogError("GetShiftsByPeriod", err, map[string]interface{}{"period": period})
+		return nil, uc.errorHandler.HandleRepositoryError("GetShiftsByPeriod", err)
+	}
+
+	// Filter shifts by period
+	periodShifts := make([]domain.Shift, 0)
+	for _, shift := range allShifts {
+		if shift.Period == period && shift.IsActive {
+			periodShifts = append(periodShifts, shift)
+		}
+	}
+
+	uc.logger.LogOperation("GetShiftsByPeriod", "success", map[string]interface{}{
+		"period": period,
+		"count":  len(periodShifts),
+	})
+
+	return periodShifts, nil
+}
+
+// ValidateShiftData validates shift data according to business rules
+func (uc *shiftUseCase) ValidateShiftData(shift *domain.Shift) error {
+	// Basic entity validation
+	if err := uc.validator.ValidateEntity(shift); err != nil {
+		uc.logger.LogValidation("ValidateShiftData", "entity", "failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return err
+	}
+
+	// Business rule validations
+	if err := uc.validator.ValidateString(shift.Name, "name", "required", "min:3", "max:50"); err != nil {
+		uc.logger.LogValidation("ValidateShiftData", "name", "failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return err
+	}
+
+	if err := uc.validator.ValidateString(shift.Period, "period", "required"); err != nil {
+		uc.logger.LogValidation("ValidateShiftData", "period", "failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return err
+	}
+
+	// Validate store ID
+	if err := uc.validator.ValidateNumber(shift.StoreID, "store_id", "positive"); err != nil {
+		uc.logger.LogValidation("ValidateShiftData", "store_id", "failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return err
+	}
+
+	// Validate lunch minutes
+	if err := uc.validator.ValidateNumber(shift.LunchMinutes, "lunch_minutes", "non_negative"); err != nil {
+		uc.logger.LogValidation("ValidateShiftData", "lunch_minutes", "failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return err
+	}
+
+	uc.logger.LogValidation("ValidateShiftData", "all_fields", "passed", nil)
+	return nil
+}
+
+// ValidateShiftTiming validates shift timing according to business rules
+func (uc *shiftUseCase) ValidateShiftTiming(shift *domain.Shift) error {
+	uc.logger.LogOperation("ValidateShiftTiming", "start", map[string]interface{}{
+		"start_time": shift.StartTime,
+		"end_time":   shift.EndTime,
+	})
+
+	// Validate time format (HH:MM)
+	if !isValidTimeFormat(shift.StartTime) {
+		err := fmt.Errorf("invalid start_time format: %s. Expected format: HH:MM", shift.StartTime)
+		uc.logger.LogValidation("ValidateShiftTiming", "start_time_format", "failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return err
+	}
+
+	if !isValidTimeFormat(shift.EndTime) {
+		err := fmt.Errorf("invalid end_time format: %s. Expected format: HH:MM", shift.EndTime)
+		uc.logger.LogValidation("ValidateShiftTiming", "end_time_format", "failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return err
+	}
+
+	// Parse times for validation
+	startTime, err := time.Parse("15:04", shift.StartTime)
+	if err != nil {
+		uc.logger.LogValidation("ValidateShiftTiming", "start_time_parse", "failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return fmt.Errorf("invalid start_time: %s", shift.StartTime)
+	}
+
+	endTime, err := time.Parse("15:04", shift.EndTime)
+	if err != nil {
+		uc.logger.LogValidation("ValidateShiftTiming", "end_time_parse", "failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return fmt.Errorf("invalid end_time: %s", shift.EndTime)
+	}
+
+	// Business rule: end time must be after start time
+	if !endTime.After(startTime) {
+		err := fmt.Errorf("end_time (%s) must be after start_time (%s)", shift.EndTime, shift.StartTime)
+		uc.logger.LogValidation("ValidateShiftTiming", "time_sequence", "failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return err
+	}
+
+	// Business rule: validate minimum shift duration (at least 1 hour)
+	duration := endTime.Sub(startTime)
+	if duration < time.Hour {
+		err := fmt.Errorf("shift duration must be at least 1 hour, got: %v", duration)
+		uc.logger.LogValidation("ValidateShiftTiming", "minimum_duration", "failed", map[string]interface{}{
+			"error":    err.Error(),
+			"duration": duration.String(),
+		})
+		return err
+	}
+
+	// Business rule: validate maximum shift duration (no more than 12 hours)
+	if duration > 12*time.Hour {
+		err := fmt.Errorf("shift duration must not exceed 12 hours, got: %v", duration)
+		uc.logger.LogValidation("ValidateShiftTiming", "maximum_duration", "failed", map[string]interface{}{
+			"error":    err.Error(),
+			"duration": duration.String(),
+		})
+		return err
+	}
+
+	uc.logger.LogValidation("ValidateShiftTiming", "all_timing_rules", "passed", map[string]interface{}{
+		"duration": duration.String(),
+	})
+
+	return nil
+}
+
+// GetShiftStatistics retrieves comprehensive shift statistics for a store
+func (uc *shiftUseCase) GetShiftStatistics(storeID int) (*repository.ShiftStatistics, error) {
+	uc.logger.LogOperation("GetShiftStatistics", "start", map[string]interface{}{"store_id": storeID})
+
+	// Validate store ID
+	if err := uc.validator.ValidateID(storeID); err != nil {
+		uc.logger.LogError("GetShiftStatistics", err, map[string]interface{}{"store_id": storeID})
+		return nil, uc.errorHandler.HandleValidationError("GetShiftStatistics", err)
+	}
+
+	// Use repository method for statistics (delegating to repository for better performance)
+	stats, err := uc.repo.GetShiftStatistics(storeID)
+	if err != nil {
+		uc.logger.LogError("GetShiftStatistics", err, map[string]interface{}{"store_id": storeID})
+		return nil, uc.errorHandler.HandleRepositoryError("GetShiftStatistics", err)
+	}
+
+	uc.logger.LogOperation("GetShiftStatistics", "success", map[string]interface{}{
+		"store_id":      storeID,
+		"total_shifts":  stats.TotalShifts,
+		"active_shifts": stats.ActiveShifts,
+		"periods_count": len(stats.ShiftsByPeriod),
+	})
+
+	return stats, nil
+}
+
+// Helper functions for validation
+
+// isValidTimeFormat validates time format (HH:MM)
+func isValidTimeFormat(timeStr string) bool {
+	parts := strings.Split(timeStr, ":")
+	if len(parts) != 2 {
+		return false
+	}
+
+	hour, err := strconv.Atoi(parts[0])
+	if err != nil || hour < 0 || hour > 23 {
+		return false
+	}
+
+	minute, err := strconv.Atoi(parts[1])
+	if err != nil || minute < 0 || minute > 59 {
+		return false
+	}
+
+	return true
 }

@@ -113,6 +113,6 @@ func getID(ids []interface{}) interface{} {
 // LogError logs repository errors with context (can be extended with proper logging)
 func (h *ErrorHandler) LogError(operation string, err error, id ...interface{}) {
 	// This can be extended to use a proper logging framework
-	fmt.Printf("Repository Error [%s] Operation: %s, Table: %s, ID: %v, Error: %v\n",
+	fmt.Printf("Repository Error - Operation: %s, Table: %s, ID: %v, Error: %v\n",
 		operation, h.tableName, getID(id), err)
 }

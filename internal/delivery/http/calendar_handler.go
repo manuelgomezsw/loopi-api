@@ -1,7 +1,6 @@
 package http
 
 import (
-	"loopi-api/internal/calendar"
 	"loopi-api/internal/delivery/http/rest"
 	"loopi-api/internal/usecase"
 	"net/http"
@@ -33,10 +32,16 @@ func (h *CalendarHandler) GetHolidays(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var holidays []time.Time
+	var err error
 	if month > 0 {
-		holidays = h.calendarUseCase.GetHolidaysByMonth(year, month)
+		holidays, err = h.calendarUseCase.GetHolidaysByMonth(year, month)
 	} else {
-		holidays = h.calendarUseCase.GetHolidays(year)
+		holidays, err = h.calendarUseCase.GetHolidays(year)
+	}
+
+	if err != nil {
+		rest.HandleError(w, err)
+		return
 	}
 
 	result := struct {
@@ -69,27 +74,14 @@ func (h *CalendarHandler) GetMonthSummary(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	holidayDates := calendar.GetColombianHolidaysByMonthCached(year, month)
-	holidayMap := make(map[string]bool)
-	for _, d := range holidayDates {
-		holidayMap[d.Format("2006-01-02")] = true
+	// Use the new enhanced usecase method
+	summary, err := h.calendarUseCase.GetMonthSummary(year, month)
+	if err != nil {
+		rest.HandleError(w, err)
+		return
 	}
 
-	ordinary := h.calendarUseCase.CountOrdinaryDays(year, month)
-	sundays := h.calendarUseCase.CountSundays(year, month)
-
-	// Restar solo los festivos que NO caen domingo
-	excludeCount := 0
-	for _, hDate := range holidayDates {
-		if hDate.Weekday() != time.Sunday {
-			excludeCount++
-		}
-	}
-	adjustedOrdinary := ordinary - excludeCount
-	if adjustedOrdinary < 0 {
-		adjustedOrdinary = 0
-	}
-
+	// Format response
 	result := struct {
 		Holidays struct {
 			Count int      `json:"count"`
@@ -97,20 +89,101 @@ func (h *CalendarHandler) GetMonthSummary(w http.ResponseWriter, r *http.Request
 		} `json:"holidays"`
 		OrdinaryDays int `json:"ordinary_days"`
 		Sundays      int `json:"sundays"`
+		WorkingDays  int `json:"working_days"`
 	}{}
 
-	result.Holidays.Count = len(holidayDates)
-	result.Holidays.Dates = make([]string, len(holidayDates))
-	for i, d := range holidayDates {
+	result.Holidays.Count = len(summary.Holidays)
+	result.Holidays.Dates = make([]string, len(summary.Holidays))
+	for i, d := range summary.Holidays {
 		result.Holidays.Dates[i] = d.Format("2006-01-02")
 	}
-	result.OrdinaryDays = adjustedOrdinary
-	result.Sundays = sundays
+	result.OrdinaryDays = summary.OrdinaryDays
+	result.Sundays = summary.Sundays
+	result.WorkingDays = summary.WorkingDays
 
 	rest.OK(w, result)
 }
 
 func (h *CalendarHandler) ClearCache(w http.ResponseWriter, r *http.Request) {
-	calendar.ClearCalendarCache()
+	if err := h.calendarUseCase.ClearCache(); err != nil {
+		rest.HandleError(w, err)
+		return
+	}
 	rest.OK(w, map[string]string{"message": "Calendar cache cleared"})
+}
+
+// GetWorkingDays retrieves the number of working days in a month
+func (h *CalendarHandler) GetWorkingDays(w http.ResponseWriter, r *http.Request) {
+	year := time.Now().Year()
+	month := int(time.Now().Month())
+
+	if y := r.URL.Query().Get("year"); y != "" {
+		if parsed, err := strconv.Atoi(y); err == nil {
+			year = parsed
+		}
+	}
+	if m := r.URL.Query().Get("month"); m != "" {
+		if parsed, err := strconv.Atoi(m); err == nil {
+			month = parsed
+		}
+	}
+
+	workingDays, err := h.calendarUseCase.GetWorkingDays(year, month)
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, map[string]interface{}{
+		"year":         year,
+		"month":        month,
+		"working_days": workingDays,
+	})
+}
+
+// GetEnhancedSummary retrieves comprehensive calendar summary using the new usecase method
+func (h *CalendarHandler) GetEnhancedSummary(w http.ResponseWriter, r *http.Request) {
+	year := time.Now().Year()
+	month := int(time.Now().Month())
+
+	if y := r.URL.Query().Get("year"); y != "" {
+		if parsed, err := strconv.Atoi(y); err == nil {
+			year = parsed
+		}
+	}
+	if m := r.URL.Query().Get("month"); m != "" {
+		if parsed, err := strconv.Atoi(m); err == nil {
+			month = parsed
+		}
+	}
+
+	summary, err := h.calendarUseCase.GetMonthSummary(year, month)
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	// Format holidays as strings for JSON response
+	formattedHolidays := make([]string, len(summary.Holidays))
+	for i, holiday := range summary.Holidays {
+		formattedHolidays[i] = holiday.Format("2006-01-02")
+	}
+
+	result := struct {
+		Year         int      `json:"year"`
+		Month        int      `json:"month"`
+		Holidays     []string `json:"holidays"`
+		OrdinaryDays int      `json:"ordinary_days"`
+		Sundays      int      `json:"sundays"`
+		WorkingDays  int      `json:"working_days"`
+	}{
+		Year:         summary.Year,
+		Month:        summary.Month,
+		Holidays:     formattedHolidays,
+		OrdinaryDays: summary.OrdinaryDays,
+		Sundays:      summary.Sundays,
+		WorkingDays:  summary.WorkingDays,
+	}
+
+	rest.OK(w, result)
 }

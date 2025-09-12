@@ -1,12 +1,13 @@
 package http
 
 import (
-	"github.com/go-chi/chi/v5"
 	"loopi-api/internal/delivery/http/rest"
 	"loopi-api/internal/usecase"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type EmployeeHoursHandler struct {
@@ -40,7 +41,7 @@ func (h *EmployeeHoursHandler) GetMonthlySummary(w http.ResponseWriter, r *http.
 
 	summary, err := h.employeeHoursUseCase.GetMonthlySummary(employeeID, year, month)
 	if err != nil {
-		rest.ServerError(w, err.Error())
+		rest.HandleError(w, err)
 		return
 	}
 

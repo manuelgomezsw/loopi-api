@@ -129,8 +129,8 @@ func (r *shiftRepository) GetShiftsByPeriod(period string) ([]domain.Shift, erro
 }
 
 // GetShiftStatistics retrieves comprehensive shift statistics for a store
-func (r *shiftRepository) GetShiftStatistics(storeID int) (*ShiftStatistics, error) {
-	var stats ShiftStatistics
+func (r *shiftRepository) GetShiftStatistics(storeID int) (*repository.ShiftStatistics, error) {
+	var stats repository.ShiftStatistics
 
 	// Use transaction for consistency
 	err := r.BaseRepository.Transaction(func(tx *gorm.DB) error {
@@ -165,17 +165,4 @@ func (r *shiftRepository) GetShiftStatistics(storeID int) (*ShiftStatistics, err
 	}
 
 	return &stats, nil
-}
-
-// ShiftStatistics represents comprehensive shift statistics
-type ShiftStatistics struct {
-	TotalShifts    int64              `json:"total_shifts"`
-	ActiveShifts   int64              `json:"active_shifts"`
-	ShiftsByPeriod []ShiftPeriodCount `json:"shifts_by_period"`
-}
-
-// ShiftPeriodCount represents shift count by period
-type ShiftPeriodCount struct {
-	Period string `json:"period"`
-	Count  int64  `json:"count"`
 }

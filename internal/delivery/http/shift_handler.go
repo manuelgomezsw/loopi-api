@@ -2,13 +2,14 @@ package http
 
 import (
 	"encoding/json"
-	"github.com/go-chi/chi/v5"
 	"loopi-api/internal/delivery/http/rest"
 	"loopi-api/internal/domain"
 	"loopi-api/internal/middleware"
 	"loopi-api/internal/usecase"
 	"net/http"
 	"strconv"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type ShiftHandler struct {
@@ -36,17 +37,25 @@ func (h *ShiftHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 func (h *ShiftHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	storeID, _ := strconv.Atoi(r.URL.Query().Get("store"))
+	activeOnly := r.URL.Query().Get("active") == "true"
+	period := r.URL.Query().Get("period")
+
 	var shifts []domain.Shift
 	var err error
 
-	if storeID > 0 {
+	// Handle different query scenarios
+	if storeID > 0 && activeOnly {
+		shifts, err = h.shiftUseCase.GetActiveShiftsByStore(storeID)
+	} else if period != "" {
+		shifts, err = h.shiftUseCase.GetShiftsByPeriod(period)
+	} else if storeID > 0 {
 		shifts, err = h.shiftUseCase.GetByStore(storeID)
 	} else {
 		shifts, err = h.shiftUseCase.GetAll()
 	}
 
 	if err != nil {
-		rest.ServerError(w, err.Error())
+		rest.HandleError(w, err)
 		return
 	}
 
@@ -81,6 +90,23 @@ func (h *ShiftHandler) Get(w http.ResponseWriter, r *http.Request) {
 	rest.OK(w, shift)
 }
 
+func (h *ShiftHandler) GetStatistics(w http.ResponseWriter, r *http.Request) {
+	storeIDStr := chi.URLParam(r, "store_id")
+	storeID, err := strconv.Atoi(storeIDStr)
+	if err != nil {
+		rest.BadRequest(w, "invalid store_id")
+		return
+	}
+
+	statistics, err := h.shiftUseCase.GetShiftStatistics(storeID)
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, statistics)
+}
+
 func (h *ShiftHandler) GetByStore(w http.ResponseWriter, r *http.Request) {
 	storeIDStr := chi.URLParam(r, "store_id")
 	storeID, err := strconv.Atoi(storeIDStr)
@@ -89,7 +115,32 @@ func (h *ShiftHandler) GetByStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shifts, err := h.shiftUseCase.GetByStore(storeID)
+	// Check for active only parameter
+	activeOnly := r.URL.Query().Get("active") == "true"
+
+	var shifts []domain.Shift
+	if activeOnly {
+		shifts, err = h.shiftUseCase.GetActiveShiftsByStore(storeID)
+	} else {
+		shifts, err = h.shiftUseCase.GetByStore(storeID)
+	}
+
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, shifts)
+}
+
+func (h *ShiftHandler) GetByPeriod(w http.ResponseWriter, r *http.Request) {
+	period := chi.URLParam(r, "period")
+	if period == "" {
+		rest.BadRequest(w, "Missing period parameter")
+		return
+	}
+
+	shifts, err := h.shiftUseCase.GetShiftsByPeriod(period)
 	if err != nil {
 		rest.HandleError(w, err)
 		return

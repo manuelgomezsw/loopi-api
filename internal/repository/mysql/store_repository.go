@@ -112,8 +112,8 @@ func (r *storeRepository) GetActiveStoresByFranchise(franchiseID int) ([]domain.
 }
 
 // GetStoresWithEmployeeCount retrieves stores with employee count
-func (r *storeRepository) GetStoresWithEmployeeCount(franchiseID int) ([]StoreWithEmployeeCount, error) {
-	var results []StoreWithEmployeeCount
+func (r *storeRepository) GetStoresWithEmployeeCount(franchiseID int) ([]repository.StoreWithEmployeeCount, error) {
+	var results []repository.StoreWithEmployeeCount
 
 	err := r.GetDB().
 		Table("stores").
@@ -141,15 +141,9 @@ func (r *storeRepository) validateStore(store *domain.Store) error {
 	return nil
 }
 
-// StoreWithEmployeeCount represents a store with its employee count
-type StoreWithEmployeeCount struct {
-	domain.Store
-	EmployeeCount int `json:"employee_count"`
-}
-
 // GetStoreStatistics retrieves comprehensive store statistics
-func (r *storeRepository) GetStoreStatistics(storeID int) (*StoreStatistics, error) {
-	var stats StoreStatistics
+func (r *storeRepository) GetStoreStatistics(storeID int) (*repository.StoreStatistics, error) {
+	var stats repository.StoreStatistics
 
 	// Get basic store info
 	store, err := r.GetByID(storeID)
@@ -182,11 +176,4 @@ func (r *storeRepository) GetStoreStatistics(storeID int) (*StoreStatistics, err
 	}
 
 	return &stats, nil
-}
-
-// StoreStatistics represents comprehensive store statistics
-type StoreStatistics struct {
-	Store         domain.Store `json:"store"`
-	EmployeeCount int64        `json:"employee_count"`
-	ShiftCount    int64        `json:"shift_count"`
 }

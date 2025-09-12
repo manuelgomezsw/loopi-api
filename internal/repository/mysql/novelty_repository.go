@@ -97,8 +97,8 @@ func (r *noveltyRepository) GetTotalHoursByEmployeeAndType(employeeID, year, mon
 }
 
 // GetNoveltyTypesSummary retrieves a summary of novelty types for an employee in a month
-func (r *noveltyRepository) GetNoveltyTypesSummary(employeeID, year, month int) ([]NoveltyTypeSummary, error) {
-	var summary []NoveltyTypeSummary
+func (r *noveltyRepository) GetNoveltyTypesSummary(employeeID, year, month int) ([]repository.NoveltyTypeSummary, error) {
+	var summary []repository.NoveltyTypeSummary
 
 	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
 	endDate := startDate.AddDate(0, 1, -1).Add(23*time.Hour + 59*time.Minute + 59*time.Second)
@@ -116,11 +116,4 @@ func (r *noveltyRepository) GetNoveltyTypesSummary(employeeID, year, month int) 
 	}
 
 	return summary, nil
-}
-
-// NoveltyTypeSummary represents a summary of novelties by type
-type NoveltyTypeSummary struct {
-	Type       string  `json:"type"`
-	Count      int     `json:"count"`
-	TotalHours float64 `json:"total_hours"`
 }

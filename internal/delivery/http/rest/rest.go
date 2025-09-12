@@ -10,7 +10,9 @@ func JSON(w http.ResponseWriter, status int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if payload != nil {
-		json.NewEncoder(w).Encode(payload)
+		// Error is ignored intentionally - response already started
+		//nolint:errcheck,gosec
+		_ = json.NewEncoder(w).Encode(payload)
 	}
 }
 

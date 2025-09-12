@@ -2,26 +2,66 @@ package http
 
 import (
 	"encoding/json"
-	"github.com/go-chi/chi/v5"
 	"loopi-api/internal/delivery/http/rest"
 	"loopi-api/internal/domain"
-	"loopi-api/internal/repository"
+	"loopi-api/internal/usecase"
 	"net/http"
 	"strconv"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type StoreHandler struct {
-	repo repository.StoreRepository
+	storeUseCase usecase.StoreUseCase
 }
 
-func NewStoreHandler(repo repository.StoreRepository) *StoreHandler {
-	return &StoreHandler{repo}
+func NewStoreHandler(storeUseCase usecase.StoreUseCase) *StoreHandler {
+	return &StoreHandler{storeUseCase: storeUseCase}
 }
 
 func (h *StoreHandler) GetAll(w http.ResponseWriter, r *http.Request) {
-	stores, err := h.repo.GetAll()
+	// Check for query parameters to determine which operation to use
+	franchiseID, _ := strconv.Atoi(r.URL.Query().Get("franchise"))
+	activeOnly := r.URL.Query().Get("active") == "true"
+	withEmployeeCount := r.URL.Query().Get("with_employee_count") == "true"
+
+	if franchiseID > 0 && withEmployeeCount {
+		// Get stores with employee count for franchise
+		stores, err := h.storeUseCase.GetStoresWithEmployeeCount(franchiseID)
+		if err != nil {
+			rest.HandleError(w, err)
+			return
+		}
+		rest.OK(w, stores)
+		return
+	}
+
+	if franchiseID > 0 && activeOnly {
+		// Get only active stores for franchise
+		stores, err := h.storeUseCase.GetActiveStoresByFranchise(franchiseID)
+		if err != nil {
+			rest.HandleError(w, err)
+			return
+		}
+		rest.OK(w, stores)
+		return
+	}
+
+	if franchiseID > 0 {
+		// Get all stores for franchise
+		stores, err := h.storeUseCase.GetByFranchiseID(franchiseID)
+		if err != nil {
+			rest.HandleError(w, err)
+			return
+		}
+		rest.OK(w, stores)
+		return
+	}
+
+	// Get all stores
+	stores, err := h.storeUseCase.GetAll()
 	if err != nil {
-		rest.BadRequest(w, err.Error())
+		rest.HandleError(w, err)
 		return
 	}
 
@@ -29,10 +69,16 @@ func (h *StoreHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *StoreHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
-	store, err := h.repo.GetByID(id)
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		rest.NotFound(w, err.Error())
+		rest.BadRequest(w, "Invalid store ID")
+		return
+	}
+
+	store, err := h.storeUseCase.GetByID(id)
+	if err != nil {
+		rest.HandleError(w, err)
 		return
 	}
 
@@ -42,14 +88,23 @@ func (h *StoreHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 func (h *StoreHandler) GetByFranchiseID(w http.ResponseWriter, r *http.Request) {
 	franchiseIDStr := chi.URLParam(r, "franchiseID")
 	franchiseID, err := strconv.Atoi(franchiseIDStr)
-	if err != nil || franchiseID <= 0 {
+	if err != nil {
 		rest.BadRequest(w, "Invalid franchise ID")
 		return
 	}
 
-	stores, err := h.repo.GetByFranchiseID(franchiseID)
+	// Check for active only parameter
+	activeOnly := r.URL.Query().Get("active") == "true"
+
+	var stores []domain.Store
+	if activeOnly {
+		stores, err = h.storeUseCase.GetActiveStoresByFranchise(franchiseID)
+	} else {
+		stores, err = h.storeUseCase.GetByFranchiseID(franchiseID)
+	}
+
 	if err != nil {
-		rest.ServerError(w, err.Error())
+		rest.HandleError(w, err)
 		return
 	}
 
@@ -57,41 +112,109 @@ func (h *StoreHandler) GetByFranchiseID(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *StoreHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var s domain.Store
-	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
-		rest.BadRequest(w, "Invalid JSON")
-		return
-	}
-	if err := h.repo.Create(&s); err != nil {
-		rest.ServerError(w, err.Error())
+	var store domain.Store
+	if err := json.NewDecoder(r.Body).Decode(&store); err != nil {
+		rest.BadRequest(w, "Invalid JSON format")
 		return
 	}
 
-	rest.Created(w, s)
+	if err := h.storeUseCase.Create(&store); err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.Created(w, store)
 }
 
 func (h *StoreHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
-	var s domain.Store
-	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
-		rest.BadRequest(w, "Invalid JSON")
-		return
-	}
-	s.ID = uint(id)
-	if err := h.repo.Update(&s); err != nil {
-		rest.ServerError(w, err.Error())
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		rest.BadRequest(w, "Invalid store ID")
 		return
 	}
 
-	rest.OK(w, s)
+	var store domain.Store
+	if err := json.NewDecoder(r.Body).Decode(&store); err != nil {
+		rest.BadRequest(w, "Invalid JSON format")
+		return
+	}
+
+	store.ID = uint(id)
+	if err := h.storeUseCase.Update(&store); err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, store)
 }
 
 func (h *StoreHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
-	if err := h.repo.Delete(id); err != nil {
-		rest.ServerError(w, err.Error())
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		rest.BadRequest(w, "Invalid store ID")
+		return
+	}
+
+	if err := h.storeUseCase.Delete(id); err != nil {
+		rest.HandleError(w, err)
 		return
 	}
 
 	rest.NoContent(w)
+}
+
+// GetStatistics retrieves comprehensive statistics for a store
+func (h *StoreHandler) GetStatistics(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		rest.BadRequest(w, "Invalid store ID")
+		return
+	}
+
+	statistics, err := h.storeUseCase.GetStoreStatistics(id)
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, statistics)
+}
+
+// GetStoresWithEmployeeCount retrieves stores with their employee counts for a franchise
+func (h *StoreHandler) GetStoresWithEmployeeCount(w http.ResponseWriter, r *http.Request) {
+	franchiseIDStr := chi.URLParam(r, "franchiseID")
+	franchiseID, err := strconv.Atoi(franchiseIDStr)
+	if err != nil {
+		rest.BadRequest(w, "Invalid franchise ID")
+		return
+	}
+
+	stores, err := h.storeUseCase.GetStoresWithEmployeeCount(franchiseID)
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, stores)
+}
+
+// GetActiveStoresByFranchise retrieves only active stores for a franchise
+func (h *StoreHandler) GetActiveStoresByFranchise(w http.ResponseWriter, r *http.Request) {
+	franchiseIDStr := chi.URLParam(r, "franchiseID")
+	franchiseID, err := strconv.Atoi(franchiseIDStr)
+	if err != nil {
+		rest.BadRequest(w, "Invalid franchise ID")
+		return
+	}
+
+	stores, err := h.storeUseCase.GetActiveStoresByFranchise(franchiseID)
+	if err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, stores)
 }

@@ -35,7 +35,7 @@ func (h *AuthHandler) Login(w nethttp.ResponseWriter, r *nethttp.Request) {
 
 	token, err := h.authUseCase.Login(req.Email, req.Password)
 	if err != nil {
-		rest.Unauthorized(w, "Invalid credentials")
+		rest.HandleError(w, err)
 		return
 	}
 
@@ -58,7 +58,7 @@ func (h *AuthHandler) SelectContext(w nethttp.ResponseWriter, r *nethttp.Request
 	// Lógica de selección y verificación
 	token, err := h.authUseCase.SelectContext(userID, req.FranchiseID, req.StoreID)
 	if err != nil {
-		rest.Forbidden(w, err.Error())
+		rest.HandleError(w, err)
 		return
 	}
 
