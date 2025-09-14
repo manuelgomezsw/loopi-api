@@ -5,6 +5,8 @@ import (
 	"loopi-api/internal/domain"
 	"loopi-api/internal/repository"
 	"loopi-api/internal/usecase/base"
+	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -14,7 +16,7 @@ type EmployeeUseCase interface {
 	GetAll() ([]domain.User, error)
 	FindByID(id int) (*domain.User, error)
 	GetByStore(storeID int) ([]domain.User, error)
-	Create(user domain.User, roleID, franchiseID int) error
+	Create(user domain.User, storeID int) error
 	Update(id int, fields map[string]interface{}) error
 	Delete(id int) error
 
@@ -28,18 +30,22 @@ type EmployeeUseCase interface {
 }
 
 type employeeUseCase struct {
-	userRepo     repository.UserRepository
-	errorHandler *base.ErrorHandler
-	validator    *base.Validator
-	logger       *base.Logger
+	userRepo      repository.UserRepository
+	storeRepo     repository.StoreRepository
+	franchiseRepo repository.FranchiseRepository
+	errorHandler  *base.ErrorHandler
+	validator     *base.Validator
+	logger        *base.Logger
 }
 
-func NewEmployeeUseCase(userRepo repository.UserRepository) EmployeeUseCase {
+func NewEmployeeUseCase(userRepo repository.UserRepository, storeRepo repository.StoreRepository, franchiseRepo repository.FranchiseRepository) EmployeeUseCase {
 	return &employeeUseCase{
-		userRepo:     userRepo,
-		errorHandler: base.NewErrorHandler("Employee"),
-		validator:    base.NewValidator(),
-		logger:       base.NewLogger("Employee"),
+		userRepo:      userRepo,
+		storeRepo:     storeRepo,
+		franchiseRepo: franchiseRepo,
+		errorHandler:  base.NewErrorHandler("Employee"),
+		validator:     base.NewValidator(),
+		logger:        base.NewLogger("Employee"),
 	}
 }
 
@@ -130,11 +136,10 @@ func (uc *employeeUseCase) FindByID(id int) (*domain.User, error) {
 }
 
 // Create creates a new employee with validation and password hashing
-func (uc *employeeUseCase) Create(user domain.User, roleID, franchiseID int) error {
+func (uc *employeeUseCase) Create(user domain.User, storeID int) error {
 	uc.logger.LogOperation("Create", "start", map[string]interface{}{
-		"email":        user.Email,
-		"role_id":      roleID,
-		"franchise_id": franchiseID,
+		"email":    user.Email,
+		"store_id": storeID,
 	})
 
 	// Validate employee data
@@ -147,45 +152,42 @@ func (uc *employeeUseCase) Create(user domain.User, roleID, franchiseID int) err
 		return err
 	}
 
-	// Validate role and franchise IDs
-	if err := uc.validator.ValidateID(roleID); err != nil {
+	// Validate store ID
+	if err := uc.validator.ValidateID(storeID); err != nil {
 		uc.logger.LogError("Create", err, map[string]interface{}{
-			"role_id": roleID,
+			"store_id": storeID,
 		})
-		return uc.errorHandler.HandleValidationError("Create", fmt.Errorf("invalid role ID: %v", err))
-	}
-
-	if err := uc.validator.ValidateID(franchiseID); err != nil {
-		uc.logger.LogError("Create", err, map[string]interface{}{
-			"franchise_id": franchiseID,
-		})
-		return uc.errorHandler.HandleValidationError("Create", fmt.Errorf("invalid franchise ID: %v", err))
+		return uc.errorHandler.HandleValidationError("Create", fmt.Errorf("invalid store ID: %v", err))
 	}
 
 	// Set defaults
 	user.IsActive = true
 
-	// Hash password
-	hashedPassword, err := uc.HashPassword(user.PasswordHash)
+	// Generate default password based on franchise name + current year
+	defaultPassword, err := uc.GenerateDefaultPassword(storeID)
+	if err != nil {
+		return err
+	}
+
+	// Hash the generated password
+	hashedPassword, err := uc.HashPassword(defaultPassword)
 	if err != nil {
 		return err
 	}
 	user.PasswordHash = hashedPassword
 
-	// Execute creation
-	if err := uc.userRepo.Create(user, roleID, franchiseID); err != nil {
+	// Execute creation with store association
+	if err := uc.userRepo.CreateWithStore(user, storeID); err != nil {
 		uc.logger.LogError("Create", err, map[string]interface{}{
-			"email":        user.Email,
-			"role_id":      roleID,
-			"franchise_id": franchiseID,
+			"email":    user.Email,
+			"store_id": storeID,
 		})
 		return uc.errorHandler.HandleRepositoryError("Create", err)
 	}
 
 	uc.logger.LogOperation("Create", "success", map[string]interface{}{
-		"email":        user.Email,
-		"role_id":      roleID,
-		"franchise_id": franchiseID,
+		"email":    user.Email,
+		"store_id": storeID,
 	})
 
 	return nil
@@ -404,14 +406,7 @@ func (uc *employeeUseCase) ValidateEmployeeData(user *domain.User) error {
 		}
 	}
 
-	// Validate password (initial password must be provided)
-	if user.PasswordHash == "" {
-		err := fmt.Errorf("password is required for new employee")
-		uc.logger.LogValidation("ValidateEmployeeData", "password", "failed", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return uc.errorHandler.HandleValidationError("ValidateEmployeeData", err)
-	}
+	// Password is not required - it will be generated automatically in Create method
 
 	uc.logger.LogValidation("ValidateEmployeeData", "all_fields", "passed", map[string]interface{}{
 		"email": user.Email,
@@ -472,6 +467,43 @@ func (uc *employeeUseCase) HashPassword(password string) (string, error) {
 
 	uc.logger.LogOperation("HashPassword", "success", nil)
 	return string(hashed), nil
+}
+
+// GenerateDefaultPassword generates a default password using franchise name + current year
+func (uc *employeeUseCase) GenerateDefaultPassword(storeID int) (string, error) {
+	uc.logger.LogOperation("GenerateDefaultPassword", "start", map[string]interface{}{
+		"store_id": storeID,
+	})
+
+	// Get store information
+	store, err := uc.storeRepo.GetByID(storeID)
+	if err != nil {
+		uc.logger.LogError("GenerateDefaultPassword", err, map[string]interface{}{
+			"store_id": storeID,
+		})
+		return "", uc.errorHandler.HandleRepositoryError("GenerateDefaultPassword", fmt.Errorf("failed to get store: %v", err))
+	}
+
+	// Get franchise information
+	franchise, err := uc.franchiseRepo.GetById(int(store.FranchiseID))
+	if err != nil {
+		uc.logger.LogError("GenerateDefaultPassword", err, map[string]interface{}{
+			"franchise_id": store.FranchiseID,
+		})
+		return "", uc.errorHandler.HandleRepositoryError("GenerateDefaultPassword", fmt.Errorf("failed to get franchise: %v", err))
+	}
+
+	// Generate password: FRANCHISENAME + CURRENTYEAR
+	currentYear := time.Now().Year()
+	password := strings.ToUpper(franchise.Name) + fmt.Sprintf("%d", currentYear)
+
+	uc.logger.LogOperation("GenerateDefaultPassword", "success", map[string]interface{}{
+		"store_id":      storeID,
+		"franchise_id":  store.FranchiseID,
+		"password_hint": strings.ToUpper(franchise.Name) + "****", // Log hint without full password
+	})
+
+	return password, nil
 }
 
 // ValidateUpdateFields validates and cleans fields for update operations

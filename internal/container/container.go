@@ -102,7 +102,7 @@ func newUseCases(repos *Repositories) *UseCases {
 		Auth:            usecase.NewAuthUseCase(repos.User),
 		Franchise:       usecase.NewFranchiseUseCase(repos.Franchise),
 		Store:           usecase.NewStoreUseCase(repos.Store),
-		Employee:        usecase.NewEmployeeUseCase(repos.User),
+		Employee:        usecase.NewEmployeeUseCase(repos.User, repos.Store, repos.Franchise),
 		EmployeeHours:   usecase.NewEmployeeHoursUseCase(repos.AssignedShift, repos.Absence, repos.Novelty, repos.User),
 		Shift:           usecase.NewShiftUseCase(repos.Shift),
 		ShiftProjection: usecase.NewShiftProjectionUseCase(repos.Shift, repos.WorkConfig),

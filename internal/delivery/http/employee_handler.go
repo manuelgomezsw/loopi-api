@@ -29,10 +29,8 @@ var employeeRequest struct {
 	Phone          string  `json:"phone"`
 	Email          string  `json:"email"`
 	Position       string  `json:"position"`
-	Password       string  `json:"password"`
 	Salary         float64 `json:"salary"`
-	RoleID         int     `json:"role_id"`
-	FranchiseID    int     `json:"franchise_id"`
+	StoreID        int     `json:"store_id"`
 }
 
 func (h *EmployeeHandler) GetAll(w http.ResponseWriter, r *http.Request) {
@@ -93,10 +91,9 @@ func (h *EmployeeHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Email:          employeeRequest.Email,
 		Position:       employeeRequest.Position,
 		Salary:         employeeRequest.Salary,
-		PasswordHash:   employeeRequest.Password,
 	}
 
-	if err := h.employeeUseCase.Create(user, employeeRequest.RoleID, employeeRequest.FranchiseID); err != nil {
+	if err := h.employeeUseCase.Create(user, employeeRequest.StoreID); err != nil {
 		rest.HandleError(w, err)
 		return
 	}

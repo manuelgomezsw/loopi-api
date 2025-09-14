@@ -1,0 +1,176 @@
+{
+	"info": {
+		"name": "Loopi API - Employees",
+		"description": "Endpoints de empleados para la API Loopi",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "franchiseId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "storeId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "employeeId",
+			"value": "1",
+			"type": "string"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Get All Employees",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/employees/",
+					"host": ["{{baseUrl}}"],
+					"path": ["employees", ""]
+				}
+			}
+		},
+		{
+			"name": "Get Employee by ID",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/employees/{{employeeId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["employees", "{{employeeId}}"]
+				}
+			}
+		},
+		{
+			"name": "Get Active Employees",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/employees/active",
+					"host": ["{{baseUrl}}"],
+					"path": ["employees", "active"]
+				}
+			}
+		},
+		{
+			"name": "Get Employees by Store",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/employees/store/{{storeId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["employees", "store", "{{storeId}}"]
+				}
+			}
+		},
+		{
+			"name": "Get Active Employees by Store",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/employees/store/{{storeId}}/active",
+					"host": ["{{baseUrl}}"],
+					"path": ["employees", "store", "{{storeId}}", "active"]
+				}
+			}
+		},
+		{
+			"name": "Create Employee",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 201) {",
+							"    console.log('Empleado creado exitosamente');",
+							"    pm.test('Employee created successfully', function () {",
+							"        pm.expect(pm.response.code).to.eql(201);",
+							"    });",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"first_name\": \"Juan\",\n    \"last_name\": \"Pérez\",\n    \"document_type\": \"CC\",\n    \"document_number\": \"12345678\",\n    \"birthdate\": \"1990-01-15\",\n    \"phone\": \"3001234567\",\n    \"email\": \"juan.perez@example.com\",\n    \"position\": \"Vendedor\",\n    \"salary\": 1500000.0,\n    \"store_id\": {{storeId}}\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/employees/",
+					"host": ["{{baseUrl}}"],
+					"path": ["employees", ""]
+				}
+			}
+		},
+		{
+			"name": "Update Employee",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"first_name\": \"Juan Carlos\",\n    \"last_name\": \"Pérez López\",\n    \"phone\": \"3009876543\",\n    \"position\": \"Supervisor\",\n    \"salary\": 2000000.0\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/employees/{{employeeId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["employees", "{{employeeId}}"]
+				}
+			}
+		},
+		{
+			"name": "Delete Employee",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/employees/{{employeeId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["employees", "{{employeeId}}"]
+				}
+			}
+		}
+	]
+}

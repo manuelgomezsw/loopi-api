@@ -376,28 +376,44 @@
 					},
 					"response": []
 				},
-				{
-					"name": "Create Employee",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"first_name\": \"Juan\",\n    \"last_name\": \"Pérez\",\n    \"document_type\": \"CC\",\n    \"document_number\": \"12345678\",\n    \"birthdate\": \"1990-01-01\",\n    \"phone\": \"3001234567\",\n    \"email\": \"juan.perez@example.com\",\n    \"position\": \"Vendedor\",\n    \"password\": \"password123\",\n    \"salary\": 1200000,\n    \"role_id\": 2,\n    \"franchise_id\": {{franchiseId}}\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/employees/",
-							"host": ["{{baseUrl}}"],
-							"path": ["employees", ""]
+			{
+				"name": "Create Employee",
+				"event": [
+					{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"if (pm.response.code === 201) {",
+								"    console.log('Empleado creado exitosamente');",
+								"    pm.test('Employee created successfully', function () {",
+								"        pm.expect(pm.response.code).to.eql(201);",
+								"    });",
+								"}"
+							],
+							"type": "text/javascript"
 						}
+					}
+				],
+				"request": {
+					"method": "POST",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"body": {
+						"mode": "raw",
+						"raw": "{\n    \"first_name\": \"Juan\",\n    \"last_name\": \"Pérez\",\n    \"document_type\": \"CC\",\n    \"document_number\": \"12345678\",\n    \"birthdate\": \"1990-01-15\",\n    \"phone\": \"3001234567\",\n    \"email\": \"juan.perez@example.com\",\n    \"position\": \"Vendedor\",\n    \"salary\": 1500000.0,\n    \"store_id\": {{storeId}}\n}"
 					},
-					"response": []
+					"url": {
+						"raw": "{{baseUrl}}/employees/",
+						"host": ["{{baseUrl}}"],
+						"path": ["employees", ""]
+					}
 				},
+				"response": []
+			},
 				{
 					"name": "Update Employee",
 					"request": {

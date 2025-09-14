@@ -20,8 +20,6 @@ type User struct {
 }
 
 type UserRole struct {
-	TimestampOnlyEntity
-
 	UserID      int `gorm:"primaryKey"`
 	RoleID      int `gorm:"primaryKey"`
 	FranchiseID int `gorm:"primaryKey"`
@@ -30,3 +28,5 @@ type UserRole struct {
 	Role      Role      `gorm:"foreignKey:RoleID"`
 	Franchise Franchise `gorm:"foreignKey:FranchiseID"`
 }
+
+// ✅ Sin timestamps - coincide con la tabla user_roles que solo tiene las 3 claves foráneas

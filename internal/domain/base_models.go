@@ -48,8 +48,3 @@ type TimestampOnlyEntity struct {
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
-
-// SimpleEntity for basic entities without timestamps
-type SimpleEntity struct {
-	ID uint `gorm:"primaryKey" json:"id"`
-}

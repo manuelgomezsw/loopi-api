@@ -149,6 +149,30 @@ func (r *userRepository) Create(user domain.User, roleID, franchiseID int) error
 	})
 }
 
+// CreateWithStore creates a new user and associates it with a store
+func (r *userRepository) CreateWithStore(user domain.User, storeID int) error {
+	// Business validation before creation
+	if err := r.validateUser(&user); err != nil {
+		return r.errorHandler.HandleError("CreateWithStore", err)
+	}
+
+	// Use transaction to ensure atomicity
+	return r.BaseRepository.Transaction(func(tx *gorm.DB) error {
+		// Create user
+		if err := tx.Create(&user).Error; err != nil {
+			return err
+		}
+
+		// Create store-user relationship
+		storeUser := domain.StoreUser{
+			StoreID: uint(storeID),
+			UserID:  user.ID,
+		}
+
+		return tx.Create(&storeUser).Error
+	})
+}
+
 // Update updates user fields with validation
 func (r *userRepository) Update(id int, fields map[string]interface{}) error {
 	// Check if user exists

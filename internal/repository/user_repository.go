@@ -11,6 +11,7 @@ type UserRepository interface {
 	FindByEmail(email string) (*domain.User, error)
 	FindByID(userID int) (*domain.User, error)
 	Create(user domain.User, roleID, franchiseID int) error
+	CreateWithStore(user domain.User, storeID int) error
 	Update(id int, fields map[string]interface{}) error
 	Delete(id int) error
 }

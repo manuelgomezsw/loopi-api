@@ -1,7 +1,5 @@
 package domain
 
-import "time"
-
 type Store struct {
 	BaseEntity
 
@@ -17,12 +15,10 @@ type Store struct {
 }
 
 type StoreUser struct {
-	BaseEntity
+	ID uint `gorm:"primaryKey;autoIncrement" json:"id"` // ✅ Campo ID directo con auto-increment
 
-	StoreID   uint       `json:"store_id" gorm:"index;not null"`
-	UserID    uint       `json:"user_id" gorm:"index;not null"`
-	StartDate *time.Time `json:"start_date"`
-	EndDate   *time.Time `json:"end_date"`
+	StoreID uint `json:"store_id" gorm:"index;not null"`
+	UserID  uint `json:"user_id" gorm:"index;not null"`
 
 	Store Store `json:"-" gorm:"foreignKey:StoreID"` // evitar ciclos
 	User  User  `json:"-" gorm:"foreignKey:UserID"`

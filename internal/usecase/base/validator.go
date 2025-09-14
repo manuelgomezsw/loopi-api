@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -257,29 +258,12 @@ func extractNumber(rule string) int {
 		return 0
 	}
 
-	// Simple number extraction (could be improved with strconv.Atoi)
-	switch parts[1] {
-	case "1":
-		return 1
-	case "2":
-		return 2
-	case "3":
-		return 3
-	case "4":
-		return 4
-	case "5":
-		return 5
-	case "10":
-		return 10
-	case "50":
-		return 50
-	case "100":
-		return 100
-	case "255":
-		return 255
-	default:
-		return 0
+	// Dynamic number extraction using strconv.Atoi
+	number, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0 // Return 0 if conversion fails
 	}
+	return number
 }
 
 func isValidEmail(email string) bool {
