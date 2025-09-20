@@ -1,0 +1,43 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Kill Server Processes",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "./scripts/kill-server.sh"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Kill Server Processes (Silent)",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "pkill -f 'go run.*server' 2>/dev/null || true && pkill -f '__debug_b' 2>/dev/null || true && pkill -f 'server$|./server' 2>/dev/null || true && sleep 1 && lsof -ti :8080 | xargs kill 2>/dev/null || true && sleep 1 && lsof -ti :8080 | xargs kill -9 2>/dev/null || true"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": false,
+                "reveal": "never",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "problemMatcher": []
+        }
+    ]
+}

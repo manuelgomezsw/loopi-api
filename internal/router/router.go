@@ -152,14 +152,15 @@ func setupShiftRoutes(r *chi.Mux, container *container.Container) {
 		// Standard CRUD routes
 		r.Post("/", container.Handlers.Shift.Create)
 		r.Get("/", container.Handlers.Shift.GetAll)
-		r.Get("/single", container.Handlers.Shift.Get)
+		r.Get("/{id}", container.Handlers.Shift.Get)
+		r.Put("/{id}", container.Handlers.Shift.Update)
+		r.Delete("/{id}", container.Handlers.Shift.Delete)
 
 		// Store-specific routes
 		r.Get("/store/{store_id}", container.Handlers.Shift.GetByStore)
 		r.Get("/store/{store_id}/statistics", container.Handlers.Shift.GetStatistics)
 
 		// Business-specific routes
-		r.Get("/period", container.Handlers.Shift.GetByPeriod)
 	})
 }
 

@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"errors"
 	"loopi-api/internal/domain"
 	"loopi-api/internal/repository"
 
@@ -80,9 +81,6 @@ func (r *shiftRepository) validateShift(shift *domain.Shift) error {
 	if shift.Name == "" {
 		return ErrInvalidInput
 	}
-	if shift.Period == "" {
-		return ErrInvalidInput
-	}
 	if shift.StartTime == "" {
 		return ErrInvalidInput
 	}
@@ -112,20 +110,56 @@ func (r *shiftRepository) GetActiveShiftsByStore(storeID int) ([]domain.Shift, e
 	return shifts, nil
 }
 
-// GetShiftsByPeriod retrieves shifts by period (morning, afternoon, night)
-func (r *shiftRepository) GetShiftsByPeriod(period string) ([]domain.Shift, error) {
-	var shifts []domain.Shift
-	err := NewQueryBuilder(r.GetDB()).
-		WhereEquals("period", period).
-		WhereActive().
-		OrderBy("start_time").
-		GetDB().
-		Find(&shifts).Error
-
-	if err != nil {
-		return nil, r.errorHandler.HandleError("GetShiftsByPeriod", err)
+// Update modifies an existing shift
+func (r *shiftRepository) Update(shift domain.Shift) error {
+	if shift.ID == 0 {
+		return r.errorHandler.HandleError("Update", ErrInvalidInput)
 	}
-	return shifts, nil
+
+	// Validate shift data
+	if err := r.validateShift(&shift); err != nil {
+		return r.errorHandler.HandleError("Update", err)
+	}
+
+	// Check if shift exists
+	existingShift, err := r.GetByID(int(shift.ID))
+	if err != nil {
+		return r.errorHandler.HandleError("Update", err)
+	}
+
+	if existingShift == nil {
+		return r.errorHandler.HandleError("Update", ErrNotFound)
+	}
+
+	// Update the shift
+	if err := r.GetDB().Save(&shift).Error; err != nil {
+		return r.errorHandler.HandleError("Update", err)
+	}
+
+	return nil
+}
+
+// Delete removes a shift by ID
+func (r *shiftRepository) Delete(id int) error {
+	if id <= 0 {
+		return r.errorHandler.HandleError("Delete", ErrInvalidInput)
+	}
+
+	// Check if shift exists
+	var shift domain.Shift
+	if err := r.GetDB().First(&shift, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return r.errorHandler.HandleError("Delete", ErrNotFound)
+		}
+		return r.errorHandler.HandleError("Delete", err)
+	}
+
+	// Perform soft delete by setting is_active to false
+	if err := r.GetDB().Model(&shift).Update("is_active", false).Error; err != nil {
+		return r.errorHandler.HandleError("Delete", err)
+	}
+
+	return nil
 }
 
 // GetShiftStatistics retrieves comprehensive shift statistics for a store
@@ -145,15 +179,6 @@ func (r *shiftRepository) GetShiftStatistics(storeID int) (*repository.ShiftStat
 		if err := tx.Model(&domain.Shift{}).
 			Where("store_id = ? AND is_active = ?", storeID, true).
 			Count(&stats.ActiveShifts).Error; err != nil {
-			return err
-		}
-
-		// Get shifts by period
-		if err := tx.Model(&domain.Shift{}).
-			Select("period, COUNT(*) as count").
-			Where("store_id = ? AND is_active = ?", storeID, true).
-			Group("period").
-			Scan(&stats.ShiftsByPeriod).Error; err != nil {
 			return err
 		}
 

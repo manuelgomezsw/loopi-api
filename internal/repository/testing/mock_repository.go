@@ -230,10 +230,10 @@ func (suite *RepositoryTestSuite) SeedTestData() {
 
 	if mockShiftRepo, ok := suite.ShiftRepo.(*MockShiftRepository); ok {
 		testShifts := []domain.Shift{
-			{Name: "Morning Shift", StoreID: 1, Period: "morning", StartTime: "08:00", EndTime: "16:00", IsActive: true},
-			{Name: "Evening Shift", StoreID: 1, Period: "evening", StartTime: "16:00", EndTime: "00:00", IsActive: true},
-			{Name: "Night Shift", StoreID: 1, Period: "night", StartTime: "00:00", EndTime: "08:00", IsActive: false},
-			{Name: "Day Shift", StoreID: 2, Period: "morning", StartTime: "09:00", EndTime: "17:00", IsActive: true},
+			{Name: "Morning Shift", StoreID: 1, StartTime: "08:00", EndTime: "16:00", IsActive: true},
+			{Name: "Evening Shift", StoreID: 1, StartTime: "16:00", EndTime: "00:00", IsActive: true},
+			{Name: "Night Shift", StoreID: 1, StartTime: "00:00", EndTime: "08:00", IsActive: false},
+			{Name: "Day Shift", StoreID: 2, StartTime: "09:00", EndTime: "17:00", IsActive: true},
 		}
 		mockShiftRepo.SeedShiftData(testShifts)
 	}
@@ -385,7 +385,6 @@ func (suite *RepositoryTestSuite) TestCreateShift() error {
 	shift := domain.Shift{
 		Name:      "Test Shift",
 		StoreID:   1,
-		Period:    "morning",
 		StartTime: "09:00",
 		EndTime:   "17:00",
 		IsActive:  true,
@@ -435,31 +434,6 @@ func (suite *RepositoryTestSuite) TestGetActiveShiftsByStore() error {
 	return nil
 }
 
-// TestGetShiftsByPeriod tests filtering shifts by period
-func (suite *RepositoryTestSuite) TestGetShiftsByPeriod() error {
-	suite.SeedTestData()
-
-	morningShifts, err := suite.ShiftRepo.GetShiftsByPeriod("morning")
-	if err != nil {
-		return err
-	}
-
-	if len(morningShifts) != 2 {
-		return errors.New("expected 2 morning shifts")
-	}
-
-	for _, shift := range morningShifts {
-		if shift.Period != "morning" {
-			return errors.New("returned shift is not a morning shift")
-		}
-		if !shift.IsActive {
-			return errors.New("returned shift is not active")
-		}
-	}
-
-	return nil
-}
-
 // TestGetShiftStatistics tests getting shift statistics
 func (suite *RepositoryTestSuite) TestGetShiftStatistics() error {
 	suite.SeedTestData()
@@ -477,10 +451,6 @@ func (suite *RepositoryTestSuite) TestGetShiftStatistics() error {
 		return errors.New("expected 2 active shifts for store 1")
 	}
 
-	if len(stats.ShiftsByPeriod) == 0 {
-		return errors.New("expected shift period statistics")
-	}
-
 	return nil
 }
 
@@ -489,6 +459,11 @@ type MockShiftRepository struct {
 	shifts     map[uint]domain.Shift
 	nextID     uint
 	shouldFail bool
+}
+
+// Update implements repository.ShiftRepository.
+func (m *MockShiftRepository) Update(shift domain.Shift) error {
+	panic("unimplemented")
 }
 
 // NewMockShiftRepository creates a new mock shift repository
@@ -587,19 +562,30 @@ func (m *MockShiftRepository) GetActiveShiftsByStore(storeID int) ([]domain.Shif
 	return shifts, nil
 }
 
-// GetShiftsByPeriod returns shifts by period
-func (m *MockShiftRepository) GetShiftsByPeriod(period string) ([]domain.Shift, error) {
+// Delete removes a shift by ID (soft delete)
+func (m *MockShiftRepository) Delete(id int) error {
 	if m.shouldFail {
-		return nil, errors.New("mock error: GetShiftsByPeriod failed")
+		return errors.New("mock error: Delete failed")
 	}
 
-	var shifts []domain.Shift
-	for _, shift := range m.shifts {
-		if shift.Period == period && shift.IsActive {
-			shifts = append(shifts, shift)
+	if id <= 0 {
+		return errors.New("invalid shift ID")
+	}
+
+	// Find and soft delete the shift
+	for i, shift := range m.shifts {
+		if int(shift.ID) == id {
+			if !shift.IsActive {
+				return errors.New("shift is already inactive/deleted")
+			}
+			// Perform soft delete by setting IsActive to false
+			shift.IsActive = false
+			m.shifts[i] = shift
+			return nil
 		}
 	}
-	return shifts, nil
+
+	return errors.New("shift not found")
 }
 
 // GetShiftStatistics returns comprehensive shift statistics for a store
@@ -610,7 +596,6 @@ func (m *MockShiftRepository) GetShiftStatistics(storeID int) (*repository.Shift
 
 	// Count shifts for the store
 	var totalShifts, activeShifts int64
-	periodCounts := make(map[string]int64)
 
 	for _, shift := range m.shifts {
 		if shift.StoreID == storeID {
@@ -618,23 +603,12 @@ func (m *MockShiftRepository) GetShiftStatistics(storeID int) (*repository.Shift
 			if shift.IsActive {
 				activeShifts++
 			}
-			periodCounts[shift.Period]++
 		}
 	}
 
-	// Convert period counts to slice
-	var shiftsByPeriod []repository.ShiftPeriodCount
-	for period, count := range periodCounts {
-		shiftsByPeriod = append(shiftsByPeriod, repository.ShiftPeriodCount{
-			Period: period,
-			Count:  count,
-		})
-	}
-
 	stats := &repository.ShiftStatistics{
-		TotalShifts:    totalShifts,
-		ActiveShifts:   activeShifts,
-		ShiftsByPeriod: shiftsByPeriod,
+		TotalShifts:  totalShifts,
+		ActiveShifts: activeShifts,
 	}
 
 	return stats, nil

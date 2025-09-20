@@ -14,7 +14,8 @@
             "args": [],
             "showLog": true,
             "trace": "verbose",
-            "logOutput": "rpc"
+            "logOutput": "rpc",
+            "preLaunchTask": "Kill Server Processes (Silent)"
         },
         {
             "name": "Launch Server (Custom Port)",
@@ -44,7 +45,8 @@
             "args": [],
             "showLog": true,
             "trace": "verbose",
-            "logOutput": "rpc"
+            "logOutput": "rpc",
+            "preLaunchTask": "Kill Server Processes (Silent)"
         },
         {
             "name": "Test Package",

@@ -38,7 +38,6 @@ func (h *ShiftHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *ShiftHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	storeID, _ := strconv.Atoi(r.URL.Query().Get("store"))
 	activeOnly := r.URL.Query().Get("active") == "true"
-	period := r.URL.Query().Get("period")
 
 	var shifts []domain.Shift
 	var err error
@@ -46,8 +45,6 @@ func (h *ShiftHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	// Handle different query scenarios
 	if storeID > 0 && activeOnly {
 		shifts, err = h.shiftUseCase.GetActiveShiftsByStore(storeID)
-	} else if period != "" {
-		shifts, err = h.shiftUseCase.GetShiftsByPeriod(period)
 	} else if storeID > 0 {
 		shifts, err = h.shiftUseCase.GetByStore(storeID)
 	} else {
@@ -63,14 +60,20 @@ func (h *ShiftHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ShiftHandler) Get(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
+	idStr := chi.URLParam(r, "id")
 	if idStr == "" {
-		rest.BadRequest(w, "Missing id")
+		rest.BadRequest(w, "Missing shift ID parameter")
 		return
 	}
+
 	id, err := strconv.Atoi(idStr)
-	if err != nil || id <= 0 {
-		rest.BadRequest(w, "Invalid id")
+	if err != nil {
+		rest.BadRequest(w, "Invalid shift ID format")
+		return
+	}
+
+	if id <= 0 {
+		rest.BadRequest(w, "Shift ID must be positive")
 		return
 	}
 
@@ -133,18 +136,73 @@ func (h *ShiftHandler) GetByStore(w http.ResponseWriter, r *http.Request) {
 	rest.OK(w, shifts)
 }
 
-func (h *ShiftHandler) GetByPeriod(w http.ResponseWriter, r *http.Request) {
-	period := chi.URLParam(r, "period")
-	if period == "" {
-		rest.BadRequest(w, "Missing period parameter")
+func (h *ShiftHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	if idStr == "" {
+		rest.BadRequest(w, "Missing shift ID parameter")
 		return
 	}
 
-	shifts, err := h.shiftUseCase.GetShiftsByPeriod(period)
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
+		rest.BadRequest(w, "Invalid shift ID format")
+		return
+	}
+
+	if err := h.shiftUseCase.Delete(id); err != nil {
 		rest.HandleError(w, err)
 		return
 	}
 
-	rest.OK(w, shifts)
+	rest.OK(w, map[string]string{"message": "Shift deleted successfully"})
+}
+
+func (h *ShiftHandler) Update(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	if idStr == "" {
+		rest.BadRequest(w, "Missing shift ID parameter")
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		rest.BadRequest(w, "Invalid shift ID format")
+		return
+	}
+
+	if id <= 0 {
+		rest.BadRequest(w, "Shift ID must be positive")
+		return
+	}
+
+	var shiftRequest struct {
+		Name         string `json:"name"`
+		StoreID      int    `json:"store_id"`
+		StartTime    string `json:"start_time"`
+		EndTime      string `json:"end_time"`
+		LunchMinutes int    `json:"lunch_minutes"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&shiftRequest); err != nil {
+		rest.BadRequest(w, "Invalid JSON format")
+		return
+	}
+
+	shift := domain.Shift{
+		BaseEntity: domain.BaseEntity{
+			ID: uint(id),
+		},
+		StoreID:      shiftRequest.StoreID,
+		Name:         shiftRequest.Name,
+		StartTime:    shiftRequest.StartTime,
+		EndTime:      shiftRequest.EndTime,
+		LunchMinutes: shiftRequest.LunchMinutes,
+	}
+
+	if err := h.shiftUseCase.Update(shift); err != nil {
+		rest.HandleError(w, err)
+		return
+	}
+
+	rest.OK(w, map[string]string{"message": "Shift updated successfully"})
 }

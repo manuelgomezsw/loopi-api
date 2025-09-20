@@ -16,10 +16,11 @@ type ShiftUseCase interface {
 	GetByID(id int) (*domain.Shift, error)
 	GetByStore(storeID int) ([]domain.Shift, error)
 	Create(shift domain.Shift) error
+	Update(shift domain.Shift) error
+	Delete(id int) error
 
 	// Business-specific operations
 	GetActiveShiftsByStore(storeID int) ([]domain.Shift, error)
-	GetShiftsByPeriod(period string) ([]domain.Shift, error)
 	ValidateShiftData(shift *domain.Shift) error
 	ValidateShiftTiming(shift *domain.Shift) error
 	GetShiftStatistics(storeID int) (*repository.ShiftStatistics, error)
@@ -147,6 +148,132 @@ func (uc *shiftUseCase) Create(shift domain.Shift) error {
 	return nil
 }
 
+// Update modifies an existing shift with business validation
+func (uc *shiftUseCase) Update(shift domain.Shift) error {
+	uc.logger.LogOperation("Update", "start", map[string]interface{}{
+		"id":       shift.ID,
+		"name":     shift.Name,
+		"store_id": shift.StoreID,
+	})
+
+	// Validate shift ID
+	if shift.ID == 0 {
+		err := fmt.Errorf("shift ID is required for update")
+		uc.logger.LogValidation("Update", "id", "failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return uc.errorHandler.HandleValidationError("Update", err)
+	}
+
+	// Validate shift data
+	if err := uc.ValidateShiftData(&shift); err != nil {
+		uc.logger.LogValidation("Update", "data", "failed", map[string]interface{}{
+			"error": err.Error(),
+			"id":    shift.ID,
+		})
+		return err
+	}
+
+	// Validate shift timing
+	if err := uc.ValidateShiftTiming(&shift); err != nil {
+		uc.logger.LogValidation("Update", "timing", "failed", map[string]interface{}{
+			"error": err.Error(),
+			"id":    shift.ID,
+		})
+		return err
+	}
+
+	// Check if shift exists and is active
+	existingShift, err := uc.repo.GetByID(int(shift.ID))
+	if err != nil {
+		uc.logger.LogError("Update", err, map[string]interface{}{"id": shift.ID})
+		return uc.errorHandler.HandleRepositoryError("Update", err)
+	}
+
+	// Business rule: Cannot update inactive shifts
+	if !existingShift.IsActive {
+		err := fmt.Errorf("cannot update inactive shift with ID %d", shift.ID)
+		uc.logger.LogValidation("Update", "inactive_shift", "failed", map[string]interface{}{
+			"error": err.Error(),
+			"id":    shift.ID,
+		})
+		return uc.errorHandler.HandleBusinessRuleViolation("Update", "inactive_shift", err.Error())
+	}
+
+	// Preserve timestamps and ensure IsActive is maintained
+	shift.CreatedAt = existingShift.CreatedAt
+	shift.UpdatedAt = time.Now()
+	if shift.IsActive == false && existingShift.IsActive == true {
+		// If trying to deactivate, use Delete method instead
+		uc.logger.LogValidation("Update", "deactivation_attempt", "failed", map[string]interface{}{
+			"message": "Use Delete method to deactivate shifts",
+			"id":      shift.ID,
+		})
+		return uc.errorHandler.HandleBusinessRuleViolation("Update", "deactivation_attempt", "Use Delete method to deactivate shifts")
+	}
+	shift.IsActive = existingShift.IsActive
+
+	// Perform update
+	if err := uc.repo.Update(shift); err != nil {
+		uc.logger.LogError("Update", err, map[string]interface{}{"id": shift.ID})
+		return uc.errorHandler.HandleRepositoryError("Update", err)
+	}
+
+	uc.logger.LogOperation("Update", "success", map[string]interface{}{
+		"id":         shift.ID,
+		"shift_name": shift.Name,
+		"store_id":   shift.StoreID,
+	})
+
+	return nil
+}
+
+// Delete removes a shift by ID with business validation
+func (uc *shiftUseCase) Delete(id int) error {
+	uc.logger.LogOperation("Delete", "start", map[string]interface{}{"id": id})
+
+	// Validate ID
+	if id <= 0 {
+		err := fmt.Errorf("invalid shift ID: %d", id)
+		uc.logger.LogValidation("Delete", "id", "failed", map[string]interface{}{
+			"error": err.Error(),
+			"id":    id,
+		})
+		return uc.errorHandler.HandleValidationError("Delete", err)
+	}
+
+	// Check if shift exists before deletion
+	shift, err := uc.repo.GetByID(id)
+	if err != nil {
+		uc.logger.LogError("Delete", err, map[string]interface{}{"id": id})
+		return uc.errorHandler.HandleRepositoryError("Delete", err)
+	}
+
+	// Business rule: Cannot delete shift if it's not active (already deleted)
+	if !shift.IsActive {
+		err := fmt.Errorf("shift with ID %d is already inactive/deleted", id)
+		uc.logger.LogValidation("Delete", "already_inactive", "failed", map[string]interface{}{
+			"error": err.Error(),
+			"id":    id,
+		})
+		return uc.errorHandler.HandleBusinessRuleViolation("Delete", "already_inactive", err.Error())
+	}
+
+	// Perform deletion
+	if err := uc.repo.Delete(id); err != nil {
+		uc.logger.LogError("Delete", err, map[string]interface{}{"id": id})
+		return uc.errorHandler.HandleRepositoryError("Delete", err)
+	}
+
+	uc.logger.LogOperation("Delete", "success", map[string]interface{}{
+		"id":         id,
+		"shift_name": shift.Name,
+		"store_id":   shift.StoreID,
+	})
+
+	return nil
+}
+
 // ✅ Business-specific operations with enhanced features
 
 // GetActiveShiftsByStore retrieves only active shifts for a store with business rule filtering
@@ -190,49 +317,6 @@ func (uc *shiftUseCase) GetActiveShiftsByStore(storeID int) ([]domain.Shift, err
 	return activeShifts, nil
 }
 
-// GetShiftsByPeriod retrieves shifts by period with validation
-func (uc *shiftUseCase) GetShiftsByPeriod(period string) ([]domain.Shift, error) {
-	uc.logger.LogOperation("GetShiftsByPeriod", "start", map[string]interface{}{"period": period})
-
-	// Validate period
-	validPeriods := []string{"morning", "afternoon", "night", "weekly", "biweekly", "monthly"}
-	isValidPeriod := false
-	for _, validPeriod := range validPeriods {
-		if period == validPeriod {
-			isValidPeriod = true
-			break
-		}
-	}
-
-	if !isValidPeriod {
-		err := fmt.Errorf("invalid period: %s. Valid periods are: %s", period, strings.Join(validPeriods, ", "))
-		uc.logger.LogError("GetShiftsByPeriod", err, map[string]interface{}{"period": period})
-		return nil, uc.errorHandler.HandleValidationError("GetShiftsByPeriod", err)
-	}
-
-	// Get all shifts and filter by period
-	allShifts, err := uc.repo.ListAll()
-	if err != nil {
-		uc.logger.LogError("GetShiftsByPeriod", err, map[string]interface{}{"period": period})
-		return nil, uc.errorHandler.HandleRepositoryError("GetShiftsByPeriod", err)
-	}
-
-	// Filter shifts by period
-	periodShifts := make([]domain.Shift, 0)
-	for _, shift := range allShifts {
-		if shift.Period == period && shift.IsActive {
-			periodShifts = append(periodShifts, shift)
-		}
-	}
-
-	uc.logger.LogOperation("GetShiftsByPeriod", "success", map[string]interface{}{
-		"period": period,
-		"count":  len(periodShifts),
-	})
-
-	return periodShifts, nil
-}
-
 // ValidateShiftData validates shift data according to business rules
 func (uc *shiftUseCase) ValidateShiftData(shift *domain.Shift) error {
 	// Basic entity validation
@@ -246,13 +330,6 @@ func (uc *shiftUseCase) ValidateShiftData(shift *domain.Shift) error {
 	// Business rule validations
 	if err := uc.validator.ValidateString(shift.Name, "name", "required", "min:3", "max:50"); err != nil {
 		uc.logger.LogValidation("ValidateShiftData", "name", "failed", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return err
-	}
-
-	if err := uc.validator.ValidateString(shift.Period, "period", "required"); err != nil {
-		uc.logger.LogValidation("ValidateShiftData", "period", "failed", map[string]interface{}{
 			"error": err.Error(),
 		})
 		return err
@@ -377,7 +454,6 @@ func (uc *shiftUseCase) GetShiftStatistics(storeID int) (*repository.ShiftStatis
 		"store_id":      storeID,
 		"total_shifts":  stats.TotalShifts,
 		"active_shifts": stats.ActiveShifts,
-		"periods_count": len(stats.ShiftsByPeriod),
 	})
 
 	return stats, nil

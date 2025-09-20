@@ -121,6 +121,48 @@ Este proyecto implementa **Clean Architecture** (Arquitectura Hexagonal) con sep
 
 ## 🔧 Desarrollo
 
+### 🛠️ Debugging y Desarrollo en VS Code
+
+El proyecto incluye configuraciones preconfiguradas para VS Code que automáticamente limpian procesos conflictivos:
+
+- **"Launch Server"**: Inicia el servidor en modo debug con limpieza automática
+- **"Launch Server with .env"**: Inicia el servidor cargando variables desde `.env` con limpieza automática
+- **"Launch Server (Custom Port)"**: Inicia en puerto 3000 para evitar conflictos
+
+#### Solución de Problemas de Puerto
+
+Si encuentras el error `"bind: address already in use"`, usa cualquiera de estas opciones:
+
+**Opción 1: Script Automático (Recomendado)**
+
+```bash
+./scripts/kill-server.sh
+```
+
+**Opción 2: Script de Limpieza Extrema (Solo casos desesperados)**
+
+```bash
+./scripts/kill-all-go.sh  # ⚠️ Mata TODOS los procesos Go del sistema
+```
+
+**Opción 3: Comandos Manuales**
+
+```bash
+# Ver qué está usando el puerto 8080
+lsof -i :8080
+
+# Matar procesos específicos
+pkill -f "go run.*server"    # Procesos go run
+pkill -f "__debug_b"         # Debugger de VS Code
+pkill -f "server"            # Binarios del servidor
+
+# Matar cualquier proceso en puerto 8080
+lsof -ti :8080 | xargs kill -9
+```
+
+**Opción 4: Usar Configuración del IDE**
+Las configuraciones de debug ya incluyen limpieza automática, simplemente ejecuta "Launch Server with .env" desde VS Code.
+
 ### Prerequisitos
 
 - **Go 1.19+**
