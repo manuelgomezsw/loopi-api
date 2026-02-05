@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/joho/godotenv"
 )
 
 // Config holds all configuration for the application.
@@ -34,7 +36,11 @@ type JWTConfig struct {
 }
 
 // Load reads configuration from environment variables.
+// It attempts to load from .env file if present (ignored if not found).
 func Load() (*Config, error) {
+	// Load .env file if it exists (ignore error if file not found)
+	_ = godotenv.Load()
+
 	jwtExpHours, err := strconv.Atoi(getEnv("JWT_EXPIRATION_HOURS", "24"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid JWT_EXPIRATION_HOURS: %w", err)

@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/manuelgomezsw/loopi-api/internal/application/service"
 	"github.com/manuelgomezsw/loopi-api/internal/infrastructure/auth"
 	"github.com/manuelgomezsw/loopi-api/internal/infrastructure/repository"
@@ -23,6 +24,16 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
+
+	// CORS configuration
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:4200", "http://127.0.0.1:4200"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 
 	// Initialize infrastructure
 	jwtManager := auth.NewJWTManager(cfg.JWT)

@@ -7,16 +7,7 @@
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/cmd/api/main.go",
-      "env": {
-        "SERVER_PORT": "8080",
-        "DB_HOST": "localhost",
-        "DB_PORT": "3306",
-        "DB_USER": "loopi",
-        "DB_PASSWORD": "loopi_secret",
-        "DB_NAME": "loopi",
-        "JWT_SECRET": "loopi-dev-secret-key-change-in-production",
-        "JWT_EXPIRATION_HOURS": "24"
-      },
+      "envFile": "${workspaceFolder}/.env",
       "args": [],
       "showLog": true
     },
@@ -26,16 +17,7 @@
       "request": "launch",
       "mode": "auto",
       "program": "${workspaceFolder}/cmd/api/main.go",
-      "env": {
-        "SERVER_PORT": "8080",
-        "DB_HOST": "localhost",
-        "DB_PORT": "3306",
-        "DB_USER": "loopi",
-        "DB_PASSWORD": "loopi_secret",
-        "DB_NAME": "loopi",
-        "JWT_SECRET": "loopi-dev-secret-key-change-in-production",
-        "JWT_EXPIRATION_HOURS": "24"
-      },
+      "envFile": "${workspaceFolder}/.env",
       "args": []
     },
     {
