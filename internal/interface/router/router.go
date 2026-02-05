@@ -29,13 +29,23 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 
 	// Initialize repositories
 	employeeRepo := repository.NewMySQLEmployeeRepository(db)
-	// itemRepo := repository.NewMySQLItemRepository(db)
+	itemRepo := repository.NewMySQLItemRepository(db)
+	inventoryRepo := repository.NewMySQLInventoryRepository(db)
+	inventoryDetailRepo := repository.NewMySQLInventoryDetailRepository(db)
+	inventoryIssueRepo := repository.NewMySQLInventoryIssueRepository(db)
 
 	// Initialize services
 	authService := service.NewAuthService(employeeRepo, jwtManager)
+	inventoryService := service.NewInventoryService(
+		inventoryRepo,
+		inventoryDetailRepo,
+		inventoryIssueRepo,
+		itemRepo,
+	)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
+	inventoryHandler := handler.NewInventoryHandler(inventoryService)
 
 	// Health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -62,48 +72,15 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 
 			// Inventories routes
 			r.Route("/inventories", func(r chi.Router) {
-				r.Get("/latest", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusNotImplemented)
-					w.Write([]byte(`{"message":"get latest inventory not implemented yet"}`))
-				})
-
-				r.Get("/suggested-schedule", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusNotImplemented)
-					w.Write([]byte(`{"message":"get suggested schedule not implemented yet"}`))
-				})
-
-				r.Post("/", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusNotImplemented)
-					w.Write([]byte(`{"message":"create inventory not implemented yet"}`))
-				})
+				r.Get("/latest", inventoryHandler.GetLatest)
+				r.Get("/suggested-schedule", inventoryHandler.GetSuggestedSchedule)
+				r.Post("/", inventoryHandler.Create)
 
 				r.Route("/{inventoryID}", func(r chi.Router) {
-					r.Get("/items", func(w http.ResponseWriter, r *http.Request) {
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusNotImplemented)
-						w.Write([]byte(`{"message":"get inventory items not implemented yet"}`))
-					})
-
-					r.Post("/details", func(w http.ResponseWriter, r *http.Request) {
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusNotImplemented)
-						w.Write([]byte(`{"message":"save inventory detail not implemented yet"}`))
-					})
-
-					r.Get("/summary", func(w http.ResponseWriter, r *http.Request) {
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusNotImplemented)
-						w.Write([]byte(`{"message":"get inventory summary not implemented yet"}`))
-					})
-
-					r.Post("/complete", func(w http.ResponseWriter, r *http.Request) {
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusNotImplemented)
-						w.Write([]byte(`{"message":"complete inventory not implemented yet"}`))
-					})
+					r.Get("/items", inventoryHandler.GetItems)
+					r.Post("/details", inventoryHandler.SaveDetail)
+					r.Get("/summary", inventoryHandler.GetSummary)
+					r.Post("/complete", inventoryHandler.Complete)
 				})
 			})
 		})
