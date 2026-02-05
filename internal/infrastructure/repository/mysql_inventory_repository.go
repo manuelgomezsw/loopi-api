@@ -20,20 +20,17 @@ func NewMySQLInventoryRepository(db *sql.DB) repository.InventoryRepository {
 	return &mysqlInventoryRepository{db: db}
 }
 
-// FindByID retrieves an inventory by its ID.
-func (r *mysqlInventoryRepository) FindByID(ctx context.Context, id uint32) (*entity.Inventory, error) {
-	query := `
-		SELECT id, inventory_date, schedule, status, responsible_id, started_at, completed_at, created_at
-		FROM inventories
-		WHERE id = ?
-	`
-
+// scanInventory scans a row into an Inventory entity.
+func (r *mysqlInventoryRepository) scanInventory(row interface{ Scan(...interface{}) error }) (*entity.Inventory, error) {
 	var inv entity.Inventory
 	var completedAt sql.NullTime
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
+	var schedule sql.NullString
+
+	err := row.Scan(
 		&inv.ID,
 		&inv.InventoryDate,
-		&inv.Schedule,
+		&inv.InventoryType,
+		&schedule,
 		&inv.Status,
 		&inv.ResponsibleID,
 		&inv.StartedAt,
@@ -44,218 +41,190 @@ func (r *mysqlInventoryRepository) FindByID(ctx context.Context, id uint32) (*en
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to find inventory by id: %w", err)
+		return nil, err
 	}
 
 	if completedAt.Valid {
 		inv.CompletedAt = &completedAt.Time
+	}
+	if schedule.Valid {
+		s := entity.Schedule(schedule.String)
+		inv.Schedule = &s
 	}
 
 	return &inv, nil
 }
 
-// FindByDateAndSchedule retrieves an inventory by date and schedule.
-func (r *mysqlInventoryRepository) FindByDateAndSchedule(ctx context.Context, date time.Time, schedule entity.Schedule) (*entity.Inventory, error) {
+// FindByID retrieves an inventory by its ID.
+func (r *mysqlInventoryRepository) FindByID(ctx context.Context, id uint32) (*entity.Inventory, error) {
 	query := `
-		SELECT id, inventory_date, schedule, status, responsible_id, started_at, completed_at, created_at
+		SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
 		FROM inventories
-		WHERE inventory_date = ? AND schedule = ?
+		WHERE id = ?
 	`
 
-	var inv entity.Inventory
-	var completedAt sql.NullTime
-	err := r.db.QueryRowContext(ctx, query, date.Format("2006-01-02"), schedule).Scan(
-		&inv.ID,
-		&inv.InventoryDate,
-		&inv.Schedule,
-		&inv.Status,
-		&inv.ResponsibleID,
-		&inv.StartedAt,
-		&completedAt,
-		&inv.CreatedAt,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
+	inv, err := r.scanInventory(r.db.QueryRowContext(ctx, query, id))
 	if err != nil {
-		return nil, fmt.Errorf("failed to find inventory by date and schedule: %w", err)
+		return nil, fmt.Errorf("failed to find inventory by id: %w", err)
+	}
+	return inv, nil
+}
+
+// FindByDateTypeAndSchedule retrieves an inventory by date, type and schedule.
+func (r *mysqlInventoryRepository) FindByDateTypeAndSchedule(ctx context.Context, date time.Time, inventoryType entity.InventoryType, schedule *entity.Schedule) (*entity.Inventory, error) {
+	var query string
+	var args []interface{}
+
+	if schedule == nil {
+		query = `
+			SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
+			FROM inventories
+			WHERE inventory_date = ? AND inventory_type = ? AND schedule IS NULL
+		`
+		args = []interface{}{date.Format("2006-01-02"), inventoryType}
+	} else {
+		query = `
+			SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
+			FROM inventories
+			WHERE inventory_date = ? AND inventory_type = ? AND schedule = ?
+		`
+		args = []interface{}{date.Format("2006-01-02"), inventoryType, *schedule}
 	}
 
-	if completedAt.Valid {
-		inv.CompletedAt = &completedAt.Time
+	inv, err := r.scanInventory(r.db.QueryRowContext(ctx, query, args...))
+	if err != nil {
+		return nil, fmt.Errorf("failed to find inventory by date, type and schedule: %w", err)
 	}
-
-	return &inv, nil
+	return inv, nil
 }
 
 // FindLatestCompleted retrieves the most recent completed inventory.
 func (r *mysqlInventoryRepository) FindLatestCompleted(ctx context.Context) (*entity.Inventory, error) {
 	query := `
-		SELECT id, inventory_date, schedule, status, responsible_id, started_at, completed_at, created_at
+		SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
 		FROM inventories
 		WHERE status = 'completed'
 		ORDER BY completed_at DESC
 		LIMIT 1
 	`
 
-	var inv entity.Inventory
-	var completedAt sql.NullTime
-	err := r.db.QueryRowContext(ctx, query).Scan(
-		&inv.ID,
-		&inv.InventoryDate,
-		&inv.Schedule,
-		&inv.Status,
-		&inv.ResponsibleID,
-		&inv.StartedAt,
-		&completedAt,
-		&inv.CreatedAt,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
+	inv, err := r.scanInventory(r.db.QueryRowContext(ctx, query))
 	if err != nil {
 		return nil, fmt.Errorf("failed to find latest completed inventory: %w", err)
 	}
-
-	if completedAt.Valid {
-		inv.CompletedAt = &completedAt.Time
-	}
-
-	return &inv, nil
+	return inv, nil
 }
 
-// FindLatestBySchedule retrieves the most recent inventory for a specific schedule.
-func (r *mysqlInventoryRepository) FindLatestBySchedule(ctx context.Context, schedule entity.Schedule) (*entity.Inventory, error) {
+// FindLatestByType retrieves the most recent completed inventory for a specific type.
+func (r *mysqlInventoryRepository) FindLatestByType(ctx context.Context, inventoryType entity.InventoryType) (*entity.Inventory, error) {
 	query := `
-		SELECT id, inventory_date, schedule, status, responsible_id, started_at, completed_at, created_at
+		SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
 		FROM inventories
-		WHERE schedule = ? AND status = 'completed'
+		WHERE inventory_type = ? AND status = 'completed'
 		ORDER BY inventory_date DESC, completed_at DESC
 		LIMIT 1
 	`
 
-	var inv entity.Inventory
-	var completedAt sql.NullTime
-	err := r.db.QueryRowContext(ctx, query, schedule).Scan(
-		&inv.ID,
-		&inv.InventoryDate,
-		&inv.Schedule,
-		&inv.Status,
-		&inv.ResponsibleID,
-		&inv.StartedAt,
-		&completedAt,
-		&inv.CreatedAt,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
+	inv, err := r.scanInventory(r.db.QueryRowContext(ctx, query, inventoryType))
 	if err != nil {
-		return nil, fmt.Errorf("failed to find latest inventory by schedule: %w", err)
+		return nil, fmt.Errorf("failed to find latest inventory by type: %w", err)
 	}
-
-	if completedAt.Valid {
-		inv.CompletedAt = &completedAt.Time
-	}
-
-	return &inv, nil
+	return inv, nil
 }
 
-// FindPreviousSchedule retrieves the previous schedule's inventory for calculating suggested values.
-func (r *mysqlInventoryRepository) FindPreviousSchedule(ctx context.Context, date time.Time, schedule entity.Schedule) (*entity.Inventory, error) {
+// FindPreviousInventory retrieves the previous inventory for calculating suggested values.
+func (r *mysqlInventoryRepository) FindPreviousInventory(ctx context.Context, date time.Time, inventoryType entity.InventoryType, schedule *entity.Schedule) (*entity.Inventory, error) {
 	var query string
 	var args []interface{}
 
-	switch schedule {
-	case entity.ScheduleOpening:
-		// For opening, get the closing from the previous day
-		previousDay := date.AddDate(0, 0, -1)
-		query = `
-			SELECT id, inventory_date, schedule, status, responsible_id, started_at, completed_at, created_at
-			FROM inventories
-			WHERE inventory_date = ? AND schedule = 'closing' AND status = 'completed'
-		`
-		args = []interface{}{previousDay.Format("2006-01-02")}
+	switch inventoryType {
+	case entity.InventoryTypeDaily:
+		if schedule == nil {
+			return nil, fmt.Errorf("schedule is required for daily inventory")
+		}
 
-	case entity.ScheduleNoon:
-		// For noon, get the opening from the same day
-		query = `
-			SELECT id, inventory_date, schedule, status, responsible_id, started_at, completed_at, created_at
-			FROM inventories
-			WHERE inventory_date = ? AND schedule = 'opening' AND status = 'completed'
-		`
-		args = []interface{}{date.Format("2006-01-02")}
+		switch *schedule {
+		case entity.ScheduleOpening:
+			// For opening, get the closing from the previous day
+			previousDay := date.AddDate(0, 0, -1)
+			query = `
+				SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
+				FROM inventories
+				WHERE inventory_date = ? AND inventory_type = 'daily' AND schedule = 'closing' AND status = 'completed'
+			`
+			args = []interface{}{previousDay.Format("2006-01-02")}
 
-	case entity.ScheduleClosing:
-		// For closing, get the noon from the same day
-		query = `
-			SELECT id, inventory_date, schedule, status, responsible_id, started_at, completed_at, created_at
-			FROM inventories
-			WHERE inventory_date = ? AND schedule = 'noon' AND status = 'completed'
-		`
-		args = []interface{}{date.Format("2006-01-02")}
+		case entity.ScheduleNoon:
+			// For noon, get the opening from the same day
+			query = `
+				SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
+				FROM inventories
+				WHERE inventory_date = ? AND inventory_type = 'daily' AND schedule = 'opening' AND status = 'completed'
+			`
+			args = []interface{}{date.Format("2006-01-02")}
 
-	case entity.ScheduleWeekly:
+		case entity.ScheduleClosing:
+			// For closing, get the noon from the same day
+			query = `
+				SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
+				FROM inventories
+				WHERE inventory_date = ? AND inventory_type = 'daily' AND schedule = 'noon' AND status = 'completed'
+			`
+			args = []interface{}{date.Format("2006-01-02")}
+
+		default:
+			return nil, fmt.Errorf("unknown schedule: %s", *schedule)
+		}
+
+	case entity.InventoryTypeWeekly:
 		// For weekly, get the last weekly inventory
 		query = `
-			SELECT id, inventory_date, schedule, status, responsible_id, started_at, completed_at, created_at
+			SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
 			FROM inventories
-			WHERE schedule = 'weekly' AND status = 'completed' AND inventory_date < ?
+			WHERE inventory_type = 'weekly' AND status = 'completed' AND inventory_date < ?
 			ORDER BY inventory_date DESC
 			LIMIT 1
 		`
 		args = []interface{}{date.Format("2006-01-02")}
 
-	case entity.ScheduleMonthly:
+	case entity.InventoryTypeMonthly:
 		// For monthly, get the last monthly inventory
 		query = `
-			SELECT id, inventory_date, schedule, status, responsible_id, started_at, completed_at, created_at
+			SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
 			FROM inventories
-			WHERE schedule = 'monthly' AND status = 'completed' AND inventory_date < ?
+			WHERE inventory_type = 'monthly' AND status = 'completed' AND inventory_date < ?
 			ORDER BY inventory_date DESC
 			LIMIT 1
 		`
 		args = []interface{}{date.Format("2006-01-02")}
 
 	default:
-		return nil, fmt.Errorf("unknown schedule: %s", schedule)
+		return nil, fmt.Errorf("unknown inventory type: %s", inventoryType)
 	}
 
-	var inv entity.Inventory
-	var completedAt sql.NullTime
-	err := r.db.QueryRowContext(ctx, query, args...).Scan(
-		&inv.ID,
-		&inv.InventoryDate,
-		&inv.Schedule,
-		&inv.Status,
-		&inv.ResponsibleID,
-		&inv.StartedAt,
-		&completedAt,
-		&inv.CreatedAt,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
+	inv, err := r.scanInventory(r.db.QueryRowContext(ctx, query, args...))
 	if err != nil {
-		return nil, fmt.Errorf("failed to find previous schedule inventory: %w", err)
+		return nil, fmt.Errorf("failed to find previous inventory: %w", err)
 	}
-
-	if completedAt.Valid {
-		inv.CompletedAt = &completedAt.Time
-	}
-
-	return &inv, nil
+	return inv, nil
 }
 
 // Create creates a new inventory.
 func (r *mysqlInventoryRepository) Create(ctx context.Context, inventory *entity.Inventory) error {
 	query := `
-		INSERT INTO inventories (inventory_date, schedule, status, responsible_id, started_at)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO inventories (inventory_date, inventory_type, schedule, status, responsible_id, started_at)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
+
+	var schedule interface{}
+	if inventory.Schedule != nil {
+		schedule = *inventory.Schedule
+	}
 
 	result, err := r.db.ExecContext(ctx, query,
 		inventory.InventoryDate.Format("2006-01-02"),
-		inventory.Schedule,
+		inventory.InventoryType,
+		schedule,
 		inventory.Status,
 		inventory.ResponsibleID,
 		inventory.StartedAt,
@@ -277,13 +246,19 @@ func (r *mysqlInventoryRepository) Create(ctx context.Context, inventory *entity
 func (r *mysqlInventoryRepository) Update(ctx context.Context, inventory *entity.Inventory) error {
 	query := `
 		UPDATE inventories
-		SET inventory_date = ?, schedule = ?, status = ?, responsible_id = ?, completed_at = ?
+		SET inventory_date = ?, inventory_type = ?, schedule = ?, status = ?, responsible_id = ?, completed_at = ?
 		WHERE id = ?
 	`
 
+	var schedule interface{}
+	if inventory.Schedule != nil {
+		schedule = *inventory.Schedule
+	}
+
 	_, err := r.db.ExecContext(ctx, query,
 		inventory.InventoryDate.Format("2006-01-02"),
-		inventory.Schedule,
+		inventory.InventoryType,
+		schedule,
 		inventory.Status,
 		inventory.ResponsibleID,
 		inventory.CompletedAt,

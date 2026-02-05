@@ -25,11 +25,18 @@ func NewInventoryHandler(inventoryService *service.InventoryService) *InventoryH
 
 // GetSuggestedSchedule handles GET /api/inventories/suggested-schedule.
 func (h *InventoryHandler) GetSuggestedSchedule(w http.ResponseWriter, r *http.Request) {
-	schedule, date := h.inventoryService.GetSuggestedSchedule()
+	suggested := h.inventoryService.GetSuggestedSchedule()
+
+	var schedule *string
+	if suggested.Schedule != nil {
+		s := string(*suggested.Schedule)
+		schedule = &s
+	}
 
 	resp := response.SuggestedScheduleResponse{
-		Schedule: string(schedule),
-		Date:     date.Format("2006-01-02"),
+		InventoryType: string(suggested.InventoryType),
+		Schedule:      schedule,
+		Date:          suggested.Date.Format("2006-01-02"),
 	}
 
 	respondJSON(w, http.StatusOK, resp)
@@ -48,10 +55,17 @@ func (h *InventoryHandler) GetLatest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var schedule *string
+	if inventory.Schedule != nil {
+		s := string(*inventory.Schedule)
+		schedule = &s
+	}
+
 	resp := response.InventoryResponse{
 		ID:            inventory.ID,
 		InventoryDate: inventory.InventoryDate.Format("2006-01-02"),
-		Schedule:      string(inventory.Schedule),
+		InventoryType: string(inventory.InventoryType),
+		Schedule:      schedule,
 		Status:        string(inventory.Status),
 		ResponsibleID: inventory.ResponsibleID,
 		StartedAt:     inventory.StartedAt,
@@ -82,6 +96,7 @@ func (h *InventoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	inventory, err := h.inventoryService.CreateInventory(
 		r.Context(),
+		req.GetInventoryType(),
 		req.GetSchedule(),
 		req.GetDate(),
 		employeeID,
@@ -95,10 +110,17 @@ func (h *InventoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var schedule *string
+	if inventory.Schedule != nil {
+		s := string(*inventory.Schedule)
+		schedule = &s
+	}
+
 	resp := response.InventoryResponse{
 		ID:            inventory.ID,
 		InventoryDate: inventory.InventoryDate.Format("2006-01-02"),
-		Schedule:      string(inventory.Schedule),
+		InventoryType: string(inventory.InventoryType),
+		Schedule:      schedule,
 		Status:        string(inventory.Status),
 		ResponsibleID: inventory.ResponsibleID,
 		StartedAt:     inventory.StartedAt,
@@ -130,13 +152,12 @@ func (h *InventoryHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 	completedCount := 0
 	for _, d := range details {
 		item := response.InventoryItemResponse{
-			ItemID:        d.ItemID,
+			ItemID:         d.ItemID,
 			SuggestedValue: d.SuggestedValue,
-			RealValue:     d.RealValue,
-			StockReceived: d.StockReceived,
-			UnitsSold:     d.UnitsSold,
-			RequiresSales: inventory.RequiresSalesAndPurchases(),
-			IsComplete:    d.IsComplete(),
+			RealValue:      d.RealValue,
+			StockReceived:  d.StockReceived,
+			UnitsSold:      d.UnitsSold,
+			IsComplete:     d.IsComplete(),
 		}
 		if d.Item != nil {
 			item.Name = d.Item.Name
@@ -147,10 +168,18 @@ func (h *InventoryHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 		items = append(items, item)
 	}
 
+	var schedule *string
+	if inventory.Schedule != nil {
+		s := string(*inventory.Schedule)
+		schedule = &s
+	}
+
 	resp := response.InventoryItemsResponse{
 		InventoryID:    inventory.ID,
-		Schedule:       string(inventory.Schedule),
+		InventoryType:  string(inventory.InventoryType),
+		Schedule:       schedule,
 		Date:           inventory.InventoryDate.Format("2006-01-02"),
+		RequiresSales:  inventory.RequiresSalesAndPurchases(),
 		TotalItems:     len(items),
 		CompletedItems: completedCount,
 		Items:          items,
@@ -159,7 +188,67 @@ func (h *InventoryHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, resp)
 }
 
-// SaveDetail handles POST /api/inventories/:id/details.
+// GetDiscrepancies handles GET /api/inventories/:id/discrepancies.
+func (h *InventoryHandler) GetDiscrepancies(w http.ResponseWriter, r *http.Request) {
+	inventoryID, err := h.getInventoryID(r)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid inventory id")
+		return
+	}
+
+	inventory, details, err := h.inventoryService.GetDiscrepancies(r.Context(), inventoryID)
+	if err != nil {
+		if err == apperrors.ErrNotFound {
+			respondError(w, http.StatusNotFound, "inventory not found")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, "failed to get discrepancies")
+		return
+	}
+
+	// Build response
+	items := make([]response.DiscrepancyItemResponse, 0, len(details))
+	for _, d := range details {
+		var suggestedVal uint16
+		if d.SuggestedValue != nil {
+			suggestedVal = *d.SuggestedValue
+		}
+
+		item := response.DiscrepancyItemResponse{
+			ItemID:         d.ItemID,
+			SuggestedValue: suggestedVal,
+			RealValue:      *d.RealValue,
+			Difference:     d.Difference(),
+			StockReceived:  d.StockReceived,
+			UnitsSold:      d.UnitsSold,
+		}
+		if d.Item != nil {
+			item.Name = d.Item.Name
+		}
+		items = append(items, item)
+	}
+
+	var schedule *string
+	if inventory.Schedule != nil {
+		s := string(*inventory.Schedule)
+		schedule = &s
+	}
+
+	resp := response.DiscrepanciesResponse{
+		InventoryID:      inventory.ID,
+		InventoryType:    string(inventory.InventoryType),
+		Schedule:         schedule,
+		Date:             inventory.InventoryDate.Format("2006-01-02"),
+		RequiresSales:    inventory.RequiresSalesAndPurchases(),
+		TotalItems:       len(items),
+		HasDiscrepancies: len(items) > 0,
+		Items:            items,
+	}
+
+	respondJSON(w, http.StatusOK, resp)
+}
+
+// SaveDetail handles POST /api/inventories/:id/details (physical count only).
 func (h *InventoryHandler) SaveDetail(w http.ResponseWriter, r *http.Request) {
 	inventoryID, err := h.getInventoryID(r)
 	if err != nil {
@@ -183,6 +272,47 @@ func (h *InventoryHandler) SaveDetail(w http.ResponseWriter, r *http.Request) {
 		inventoryID,
 		req.ItemID,
 		req.RealValue,
+	)
+	if err != nil {
+		if appErr, ok := err.(*apperrors.AppError); ok {
+			respondError(w, appErr.Code, appErr.Message)
+			return
+		}
+		respondError(w, http.StatusInternalServerError, "failed to save detail")
+		return
+	}
+
+	resp := response.SaveDetailResponse{
+		Saved:          true,
+		SuggestedValue: detail.SuggestedValue,
+	}
+
+	respondJSON(w, http.StatusOK, resp)
+}
+
+// SaveSales handles POST /api/inventories/:id/sales (sales and purchases).
+func (h *InventoryHandler) SaveSales(w http.ResponseWriter, r *http.Request) {
+	inventoryID, err := h.getInventoryID(r)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid inventory id")
+		return
+	}
+
+	var req request.SaveSalesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	detail, err := h.inventoryService.SaveSalesAndPurchases(
+		r.Context(),
+		inventoryID,
+		req.ItemID,
 		req.StockReceived,
 		req.UnitsSold,
 	)
@@ -191,7 +321,7 @@ func (h *InventoryHandler) SaveDetail(w http.ResponseWriter, r *http.Request) {
 			respondError(w, appErr.Code, appErr.Message)
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "failed to save detail")
+		respondError(w, http.StatusInternalServerError, "failed to save sales")
 		return
 	}
 
@@ -243,6 +373,8 @@ func (h *InventoryHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 			RealValue:      *d.RealValue,
 			Difference:     d.Difference(),
 			HasDiscrepancy: d.HasDiscrepancy(),
+			StockReceived:  d.StockReceived,
+			UnitsSold:      d.UnitsSold,
 		}
 		if d.Item != nil {
 			item.Name = d.Item.Name
@@ -253,9 +385,16 @@ func (h *InventoryHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 		items = append(items, item)
 	}
 
+	var schedule *string
+	if inventory.Schedule != nil {
+		s := string(*inventory.Schedule)
+		schedule = &s
+	}
+
 	resp := response.InventorySummaryResponse{
 		InventoryID:     inventory.ID,
-		Schedule:        string(inventory.Schedule),
+		InventoryType:   string(inventory.InventoryType),
+		Schedule:        schedule,
 		Date:            inventory.InventoryDate.Format("2006-01-02"),
 		TotalItems:      len(details),
 		ItemsWithIssues: issuesCount,

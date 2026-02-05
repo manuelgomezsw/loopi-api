@@ -90,6 +90,8 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 				r.Route("/{inventoryID}", func(r chi.Router) {
 					r.Get("/items", inventoryHandler.GetItems)
 					r.Post("/details", inventoryHandler.SaveDetail)
+					r.Get("/discrepancies", inventoryHandler.GetDiscrepancies)
+					r.Post("/sales", inventoryHandler.SaveSales)
 					r.Get("/summary", inventoryHandler.GetSummary)
 					r.Post("/complete", inventoryHandler.Complete)
 				})

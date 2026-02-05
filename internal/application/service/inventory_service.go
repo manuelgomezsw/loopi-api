@@ -33,8 +33,15 @@ func NewInventoryService(
 	}
 }
 
+// SuggestedInventory contains suggested inventory type and schedule.
+type SuggestedInventory struct {
+	InventoryType entity.InventoryType `json:"inventory_type"`
+	Schedule      *entity.Schedule     `json:"schedule,omitempty"`
+	Date          time.Time            `json:"date"`
+}
+
 // GetSuggestedSchedule returns the suggested schedule based on current time.
-func (s *InventoryService) GetSuggestedSchedule() (entity.Schedule, time.Time) {
+func (s *InventoryService) GetSuggestedSchedule() SuggestedInventory {
 	now := time.Now()
 	hour := now.Hour()
 
@@ -51,7 +58,11 @@ func (s *InventoryService) GetSuggestedSchedule() (entity.Schedule, time.Time) {
 		schedule = entity.ScheduleOpening
 	}
 
-	return schedule, now
+	return SuggestedInventory{
+		InventoryType: entity.InventoryTypeDaily,
+		Schedule:      &schedule,
+		Date:          now,
+	}
 }
 
 // GetLatestCompleted returns the most recent completed inventory.
@@ -64,9 +75,18 @@ func (s *InventoryService) GetLatestCompleted(ctx context.Context) (*entity.Inve
 }
 
 // CreateInventory creates a new inventory and pre-populates items with suggested values.
-func (s *InventoryService) CreateInventory(ctx context.Context, schedule entity.Schedule, date time.Time, responsibleID uint16) (*entity.Inventory, error) {
-	// Check if inventory already exists for this date and schedule
-	existing, err := s.inventoryRepo.FindByDateAndSchedule(ctx, date, schedule)
+func (s *InventoryService) CreateInventory(ctx context.Context, inventoryType entity.InventoryType, schedule *entity.Schedule, date time.Time, responsibleID uint16) (*entity.Inventory, error) {
+	// Validate: daily inventories require a schedule
+	if inventoryType == entity.InventoryTypeDaily && schedule == nil {
+		return nil, apperrors.New(400, "schedule is required for daily inventories")
+	}
+	// Weekly/monthly inventories should not have a schedule
+	if inventoryType != entity.InventoryTypeDaily {
+		schedule = nil
+	}
+
+	// Check if inventory already exists for this date, type and schedule
+	existing, err := s.inventoryRepo.FindByDateTypeAndSchedule(ctx, date, inventoryType, schedule)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing inventory: %w", err)
 	}
@@ -81,6 +101,7 @@ func (s *InventoryService) CreateInventory(ctx context.Context, schedule entity.
 	// Create new inventory
 	inventory := &entity.Inventory{
 		InventoryDate: date,
+		InventoryType: inventoryType,
 		Schedule:      schedule,
 		Status:        entity.InventoryStatusInProgress,
 		ResponsibleID: responsibleID,
@@ -101,28 +122,14 @@ func (s *InventoryService) CreateInventory(ctx context.Context, schedule entity.
 
 // prepopulateInventoryDetails creates inventory detail records for all applicable items.
 func (s *InventoryService) prepopulateInventoryDetails(ctx context.Context, inventory *entity.Inventory) error {
-	// Determine which items to include based on schedule
-	var items []*entity.Item
-	var err error
-
-	switch inventory.Schedule {
-	case entity.ScheduleOpening, entity.ScheduleNoon, entity.ScheduleClosing:
-		// Daily inventories only include products
-		items, err = s.itemRepo.FindActiveByType(ctx, entity.ItemTypeProduct)
-	case entity.ScheduleWeekly:
-		// Weekly inventories only include supplies
-		items, err = s.itemRepo.FindActiveByType(ctx, entity.ItemTypeSupply)
-	case entity.ScheduleMonthly:
-		// Monthly inventories include all items
-		items, err = s.itemRepo.FindAllActive(ctx)
-	}
-
+	// Get items based on inventory type
+	items, err := s.itemRepo.FindActiveByInventoryType(ctx, inventory.InventoryType)
 	if err != nil {
 		return fmt.Errorf("failed to get items: %w", err)
 	}
 
 	// Get previous inventory to calculate suggested values
-	previousInv, err := s.inventoryRepo.FindPreviousSchedule(ctx, inventory.InventoryDate, inventory.Schedule)
+	previousInv, err := s.inventoryRepo.FindPreviousInventory(ctx, inventory.InventoryDate, inventory.InventoryType, inventory.Schedule)
 	if err != nil {
 		return fmt.Errorf("failed to get previous inventory: %w", err)
 	}
@@ -184,8 +191,28 @@ func (s *InventoryService) GetInventoryItems(ctx context.Context, inventoryID ui
 	return inventory, details, nil
 }
 
-// SaveInventoryDetail saves or updates an inventory detail.
-func (s *InventoryService) SaveInventoryDetail(ctx context.Context, inventoryID uint32, itemID uint16, realValue uint16, stockReceived, unitsSold *uint16) (*entity.InventoryDetail, error) {
+// GetDiscrepancies returns items with discrepancies (real_value != suggested_value).
+func (s *InventoryService) GetDiscrepancies(ctx context.Context, inventoryID uint32) (*entity.Inventory, []*entity.InventoryDetail, error) {
+	// Get inventory
+	inventory, err := s.inventoryRepo.FindByID(ctx, inventoryID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get inventory: %w", err)
+	}
+	if inventory == nil {
+		return nil, nil, apperrors.ErrNotFound
+	}
+
+	// Get details with discrepancies
+	details, err := s.inventoryDetailRepo.FindDiscrepancies(ctx, inventoryID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get discrepancies: %w", err)
+	}
+
+	return inventory, details, nil
+}
+
+// SaveInventoryDetail saves or updates an inventory detail (physical count only).
+func (s *InventoryService) SaveInventoryDetail(ctx context.Context, inventoryID uint32, itemID uint16, realValue uint16) (*entity.InventoryDetail, error) {
 	// Get inventory to verify it exists and is in progress
 	inventory, err := s.inventoryRepo.FindByID(ctx, inventoryID)
 	if err != nil {
@@ -207,23 +234,61 @@ func (s *InventoryService) SaveInventoryDetail(ctx context.Context, inventoryID 
 		return nil, apperrors.New(400, "item not found in this inventory")
 	}
 
-	// Calculate suggested value for noon/closing based on previous values + purchases - sales
-	if inventory.RequiresSalesAndPurchases() && detail.SuggestedValue != nil {
-		// Recalculate suggested value: previous + received - sold
+	// Update detail with physical count only
+	detail.RealValue = &realValue
+
+	if err := s.inventoryDetailRepo.Update(ctx, detail); err != nil {
+		return nil, fmt.Errorf("failed to update inventory detail: %w", err)
+	}
+
+	return detail, nil
+}
+
+// SaveSalesAndPurchases saves sales and purchases for an inventory detail.
+func (s *InventoryService) SaveSalesAndPurchases(ctx context.Context, inventoryID uint32, itemID uint16, stockReceived, unitsSold *uint16) (*entity.InventoryDetail, error) {
+	// Get inventory to verify it exists and is in progress
+	inventory, err := s.inventoryRepo.FindByID(ctx, inventoryID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get inventory: %w", err)
+	}
+	if inventory == nil {
+		return nil, apperrors.ErrNotFound
+	}
+	if inventory.IsCompleted() {
+		return nil, apperrors.New(400, "inventory is already completed")
+	}
+	if !inventory.RequiresSalesAndPurchases() {
+		return nil, apperrors.New(400, "this inventory type does not require sales and purchases")
+	}
+
+	// Get existing detail
+	detail, err := s.inventoryDetailRepo.FindByInventoryAndItem(ctx, inventoryID, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get inventory detail: %w", err)
+	}
+	if detail == nil {
+		return nil, apperrors.New(400, "item not found in this inventory")
+	}
+
+	// Update sales and purchases
+	detail.StockReceived = stockReceived
+	detail.UnitsSold = unitsSold
+
+	// Recalculate suggested value based on previous + received - sold
+	if detail.SuggestedValue != nil {
 		suggested := *detail.SuggestedValue
 		if stockReceived != nil {
 			suggested += *stockReceived
 		}
 		if unitsSold != nil {
-			suggested -= *unitsSold
+			if suggested >= *unitsSold {
+				suggested -= *unitsSold
+			} else {
+				suggested = 0
+			}
 		}
 		detail.SuggestedValue = &suggested
 	}
-
-	// Update detail
-	detail.RealValue = &realValue
-	detail.StockReceived = stockReceived
-	detail.UnitsSold = unitsSold
 
 	if err := s.inventoryDetailRepo.Update(ctx, detail); err != nil {
 		return nil, fmt.Errorf("failed to update inventory detail: %w", err)

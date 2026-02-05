@@ -2,15 +2,22 @@ package entity
 
 import "time"
 
-// Schedule represents the time of day for an inventory.
+// InventoryType represents the type/frequency of an inventory.
+type InventoryType string
+
+const (
+	InventoryTypeDaily   InventoryType = "daily"
+	InventoryTypeWeekly  InventoryType = "weekly"
+	InventoryTypeMonthly InventoryType = "monthly"
+)
+
+// Schedule represents the time of day for a daily inventory.
 type Schedule string
 
 const (
 	ScheduleOpening Schedule = "opening"
 	ScheduleNoon    Schedule = "noon"
 	ScheduleClosing Schedule = "closing"
-	ScheduleWeekly  Schedule = "weekly"
-	ScheduleMonthly Schedule = "monthly"
 )
 
 // InventoryStatus represents the status of an inventory.
@@ -25,7 +32,8 @@ const (
 type Inventory struct {
 	ID            uint32          `json:"id"`
 	InventoryDate time.Time       `json:"inventory_date"`
-	Schedule      Schedule        `json:"schedule"`
+	InventoryType InventoryType   `json:"inventory_type"`
+	Schedule      *Schedule       `json:"schedule,omitempty"` // Nullable for weekly/monthly
 	Status        InventoryStatus `json:"status"`
 	ResponsibleID uint16          `json:"responsible_id"`
 	StartedAt     time.Time       `json:"started_at"`
@@ -42,12 +50,24 @@ func (i *Inventory) IsCompleted() bool {
 	return i.Status == InventoryStatusCompleted
 }
 
-// IsDaily returns true if the schedule is a daily schedule.
+// IsDaily returns true if the inventory type is daily.
 func (i *Inventory) IsDaily() bool {
-	return i.Schedule == ScheduleOpening || i.Schedule == ScheduleNoon || i.Schedule == ScheduleClosing
+	return i.InventoryType == InventoryTypeDaily
 }
 
-// RequiresSalesAndPurchases returns true if the schedule requires sales and purchases input.
+// RequiresSalesAndPurchases returns true if the inventory requires sales and purchases input.
+// This is true for all inventories except opening daily inventories.
 func (i *Inventory) RequiresSalesAndPurchases() bool {
-	return i.Schedule != ScheduleOpening
+	if !i.IsDaily() {
+		return true // Weekly and monthly always require sales/purchases
+	}
+	return i.Schedule != nil && *i.Schedule != ScheduleOpening
+}
+
+// GetScheduleString returns the schedule as a string, or empty if nil.
+func (i *Inventory) GetScheduleString() string {
+	if i.Schedule == nil {
+		return ""
+	}
+	return string(*i.Schedule)
 }

@@ -12,20 +12,17 @@ type InventoryRepository interface {
 	// FindByID retrieves an inventory by its ID.
 	FindByID(ctx context.Context, id uint32) (*entity.Inventory, error)
 
-	// FindByDateAndSchedule retrieves an inventory by date and schedule.
-	FindByDateAndSchedule(ctx context.Context, date time.Time, schedule entity.Schedule) (*entity.Inventory, error)
+	// FindByDateTypeAndSchedule retrieves an inventory by date, type and schedule.
+	FindByDateTypeAndSchedule(ctx context.Context, date time.Time, inventoryType entity.InventoryType, schedule *entity.Schedule) (*entity.Inventory, error)
 
 	// FindLatestCompleted retrieves the most recent completed inventory.
 	FindLatestCompleted(ctx context.Context) (*entity.Inventory, error)
 
-	// FindLatestBySchedule retrieves the most recent inventory for a specific schedule.
-	FindLatestBySchedule(ctx context.Context, schedule entity.Schedule) (*entity.Inventory, error)
+	// FindLatestByType retrieves the most recent completed inventory for a specific type.
+	FindLatestByType(ctx context.Context, inventoryType entity.InventoryType) (*entity.Inventory, error)
 
-	// FindPreviousSchedule retrieves the previous schedule's inventory for calculating suggested values.
-	// For noon, returns opening of the same day.
-	// For closing, returns noon of the same day.
-	// For opening, returns closing of the previous day.
-	FindPreviousSchedule(ctx context.Context, date time.Time, schedule entity.Schedule) (*entity.Inventory, error)
+	// FindPreviousInventory retrieves the previous inventory for calculating suggested values.
+	FindPreviousInventory(ctx context.Context, date time.Time, inventoryType entity.InventoryType, schedule *entity.Schedule) (*entity.Inventory, error)
 
 	// Create creates a new inventory.
 	Create(ctx context.Context, inventory *entity.Inventory) error
@@ -47,6 +44,9 @@ type InventoryDetailRepository interface {
 
 	// FindByInventoryAndItem retrieves a specific detail by inventory and item.
 	FindByInventoryAndItem(ctx context.Context, inventoryID uint32, itemID uint16) (*entity.InventoryDetail, error)
+
+	// FindDiscrepancies retrieves details where real_value differs from suggested_value.
+	FindDiscrepancies(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error)
 
 	// Create creates a new inventory detail.
 	Create(ctx context.Context, detail *entity.InventoryDetail) error

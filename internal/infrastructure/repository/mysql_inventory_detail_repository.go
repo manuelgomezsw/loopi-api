@@ -42,16 +42,38 @@ func (r *mysqlInventoryDetailRepository) FindByInventoryIDWithItems(ctx context.
 	query := `
 		SELECT 
 			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.created_at, d.updated_at,
-			i.id, i.type, i.name, i.active, i.created_at, i.updated_at
+			i.id, i.type, i.name, i.active, i.inventory_frequency, i.created_at, i.updated_at
 		FROM inventory_details d
 		INNER JOIN items i ON d.item_id = i.id
 		WHERE d.inventory_id = ?
 		ORDER BY i.name
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, inventoryID)
+	return r.queryDetailsWithItems(ctx, query, inventoryID)
+}
+
+// FindDiscrepancies retrieves details where real_value differs from suggested_value.
+func (r *mysqlInventoryDetailRepository) FindDiscrepancies(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error) {
+	query := `
+		SELECT 
+			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.created_at, d.updated_at,
+			i.id, i.type, i.name, i.active, i.inventory_frequency, i.created_at, i.updated_at
+		FROM inventory_details d
+		INNER JOIN items i ON d.item_id = i.id
+		WHERE d.inventory_id = ?
+			AND d.real_value IS NOT NULL
+			AND (d.suggested_value IS NULL OR d.real_value != d.suggested_value)
+		ORDER BY i.name
+	`
+
+	return r.queryDetailsWithItems(ctx, query, inventoryID)
+}
+
+// queryDetailsWithItems is a helper to query details joined with items.
+func (r *mysqlInventoryDetailRepository) queryDetailsWithItems(ctx context.Context, query string, args ...interface{}) ([]*entity.InventoryDetail, error) {
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find inventory details with items: %w", err)
+		return nil, fmt.Errorf("failed to query inventory details with items: %w", err)
 	}
 	defer rows.Close()
 
@@ -63,7 +85,7 @@ func (r *mysqlInventoryDetailRepository) FindByInventoryIDWithItems(ctx context.
 
 		if err := rows.Scan(
 			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &d.CreatedAt, &d.UpdatedAt,
-			&item.ID, &item.Type, &item.Name, &item.Active, &item.CreatedAt, &item.UpdatedAt,
+			&item.ID, &item.Type, &item.Name, &item.Active, &item.InventoryFrequency, &item.CreatedAt, &item.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan inventory detail with item: %w", err)
 		}

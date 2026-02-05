@@ -8,17 +8,26 @@ import (
 
 // CreateInventoryRequest represents the request to create a new inventory.
 type CreateInventoryRequest struct {
-	Schedule string `json:"schedule"`
-	Date     string `json:"date"` // Format: YYYY-MM-DD
+	InventoryType string  `json:"inventory_type"` // daily, weekly, monthly
+	Schedule      *string `json:"schedule,omitempty"` // opening, noon, closing (required for daily)
+	Date          string  `json:"date"` // Format: YYYY-MM-DD
 }
 
 // Validate validates the create inventory request.
 func (r *CreateInventoryRequest) Validate() error {
-	if r.Schedule == "" {
-		return ErrScheduleRequired
+	if r.InventoryType == "" {
+		return ErrInventoryTypeRequired
 	}
-	if !isValidSchedule(r.Schedule) {
-		return ErrInvalidSchedule
+	if !isValidInventoryType(r.InventoryType) {
+		return ErrInvalidInventoryType
+	}
+	if r.InventoryType == "daily" {
+		if r.Schedule == nil || *r.Schedule == "" {
+			return ErrScheduleRequired
+		}
+		if !isValidSchedule(*r.Schedule) {
+			return ErrInvalidSchedule
+		}
 	}
 	if r.Date == "" {
 		return ErrDateRequired
@@ -29,9 +38,18 @@ func (r *CreateInventoryRequest) Validate() error {
 	return nil
 }
 
-// GetSchedule returns the schedule as entity.Schedule.
-func (r *CreateInventoryRequest) GetSchedule() entity.Schedule {
-	return entity.Schedule(r.Schedule)
+// GetInventoryType returns the inventory type as entity.InventoryType.
+func (r *CreateInventoryRequest) GetInventoryType() entity.InventoryType {
+	return entity.InventoryType(r.InventoryType)
+}
+
+// GetSchedule returns the schedule as *entity.Schedule (nil for weekly/monthly).
+func (r *CreateInventoryRequest) GetSchedule() *entity.Schedule {
+	if r.Schedule == nil || r.InventoryType != "daily" {
+		return nil
+	}
+	s := entity.Schedule(*r.Schedule)
+	return &s
 }
 
 // GetDate returns the date as time.Time.
@@ -40,16 +58,29 @@ func (r *CreateInventoryRequest) GetDate() time.Time {
 	return t
 }
 
-// SaveInventoryDetailRequest represents the request to save an inventory detail.
+// SaveInventoryDetailRequest represents the request to save a physical count.
 type SaveInventoryDetailRequest struct {
-	ItemID        uint16  `json:"item_id"`
-	RealValue     uint16  `json:"real_value"`
-	StockReceived *uint16 `json:"stock_received,omitempty"`
-	UnitsSold     *uint16 `json:"units_sold,omitempty"`
+	ItemID    uint16 `json:"item_id"`
+	RealValue uint16 `json:"real_value"`
 }
 
 // Validate validates the save inventory detail request.
 func (r *SaveInventoryDetailRequest) Validate() error {
+	if r.ItemID == 0 {
+		return ErrItemIDRequired
+	}
+	return nil
+}
+
+// SaveSalesRequest represents the request to save sales and purchases.
+type SaveSalesRequest struct {
+	ItemID        uint16  `json:"item_id"`
+	StockReceived *uint16 `json:"stock_received,omitempty"`
+	UnitsSold     *uint16 `json:"units_sold,omitempty"`
+}
+
+// Validate validates the save sales request.
+func (r *SaveSalesRequest) Validate() error {
 	if r.ItemID == 0 {
 		return ErrItemIDRequired
 	}
@@ -62,8 +93,16 @@ func isValidSchedule(s string) bool {
 		"opening": true,
 		"noon":    true,
 		"closing": true,
+	}
+	return validSchedules[s]
+}
+
+// isValidInventoryType checks if the inventory type value is valid.
+func isValidInventoryType(t string) bool {
+	validTypes := map[string]bool{
+		"daily":   true,
 		"weekly":  true,
 		"monthly": true,
 	}
-	return validSchedules[s]
+	return validTypes[t]
 }
