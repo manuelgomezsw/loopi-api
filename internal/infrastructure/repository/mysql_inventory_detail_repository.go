@@ -1,0 +1,314 @@
+package repository
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+
+	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
+	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
+)
+
+// mysqlInventoryDetailRepository implements repository.InventoryDetailRepository.
+type mysqlInventoryDetailRepository struct {
+	db *sql.DB
+}
+
+// NewMySQLInventoryDetailRepository creates a new MySQL inventory detail repository.
+func NewMySQLInventoryDetailRepository(db *sql.DB) repository.InventoryDetailRepository {
+	return &mysqlInventoryDetailRepository{db: db}
+}
+
+// FindByInventoryID retrieves all details for an inventory.
+func (r *mysqlInventoryDetailRepository) FindByInventoryID(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error) {
+	query := `
+		SELECT id, inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, created_at, updated_at
+		FROM inventory_details
+		WHERE inventory_id = ?
+		ORDER BY item_id
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, inventoryID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find inventory details: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanDetails(rows)
+}
+
+// FindByInventoryIDWithItems retrieves all details with item information.
+func (r *mysqlInventoryDetailRepository) FindByInventoryIDWithItems(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error) {
+	query := `
+		SELECT 
+			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.created_at, d.updated_at,
+			i.id, i.type, i.name, i.active, i.created_at, i.updated_at
+		FROM inventory_details d
+		INNER JOIN items i ON d.item_id = i.id
+		WHERE d.inventory_id = ?
+		ORDER BY i.name
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, inventoryID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find inventory details with items: %w", err)
+	}
+	defer rows.Close()
+
+	var details []*entity.InventoryDetail
+	for rows.Next() {
+		var d entity.InventoryDetail
+		var item entity.Item
+		var suggestedValue, realValue, stockReceived, unitsSold sql.NullInt32
+
+		if err := rows.Scan(
+			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &d.CreatedAt, &d.UpdatedAt,
+			&item.ID, &item.Type, &item.Name, &item.Active, &item.CreatedAt, &item.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan inventory detail with item: %w", err)
+		}
+
+		if suggestedValue.Valid {
+			v := uint16(suggestedValue.Int32)
+			d.SuggestedValue = &v
+		}
+		if realValue.Valid {
+			v := uint16(realValue.Int32)
+			d.RealValue = &v
+		}
+		if stockReceived.Valid {
+			v := uint16(stockReceived.Int32)
+			d.StockReceived = &v
+		}
+		if unitsSold.Valid {
+			v := uint16(unitsSold.Int32)
+			d.UnitsSold = &v
+		}
+
+		d.Item = &item
+		details = append(details, &d)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating inventory details: %w", err)
+	}
+
+	return details, nil
+}
+
+// FindByInventoryAndItem retrieves a specific detail by inventory and item.
+func (r *mysqlInventoryDetailRepository) FindByInventoryAndItem(ctx context.Context, inventoryID uint32, itemID uint16) (*entity.InventoryDetail, error) {
+	query := `
+		SELECT id, inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, created_at, updated_at
+		FROM inventory_details
+		WHERE inventory_id = ? AND item_id = ?
+	`
+
+	var d entity.InventoryDetail
+	var suggestedValue, realValue, stockReceived, unitsSold sql.NullInt32
+
+	err := r.db.QueryRowContext(ctx, query, inventoryID, itemID).Scan(
+		&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &d.CreatedAt, &d.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to find inventory detail: %w", err)
+	}
+
+	if suggestedValue.Valid {
+		v := uint16(suggestedValue.Int32)
+		d.SuggestedValue = &v
+	}
+	if realValue.Valid {
+		v := uint16(realValue.Int32)
+		d.RealValue = &v
+	}
+	if stockReceived.Valid {
+		v := uint16(stockReceived.Int32)
+		d.StockReceived = &v
+	}
+	if unitsSold.Valid {
+		v := uint16(unitsSold.Int32)
+		d.UnitsSold = &v
+	}
+
+	return &d, nil
+}
+
+// Create creates a new inventory detail.
+func (r *mysqlInventoryDetailRepository) Create(ctx context.Context, detail *entity.InventoryDetail) error {
+	query := `
+		INSERT INTO inventory_details (inventory_id, item_id, suggested_value, real_value, stock_received, units_sold)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`
+
+	result, err := r.db.ExecContext(ctx, query,
+		detail.InventoryID,
+		detail.ItemID,
+		detail.SuggestedValue,
+		detail.RealValue,
+		detail.StockReceived,
+		detail.UnitsSold,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create inventory detail: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("failed to get last insert id: %w", err)
+	}
+
+	detail.ID = uint32(id)
+	return nil
+}
+
+// Update updates an existing inventory detail.
+func (r *mysqlInventoryDetailRepository) Update(ctx context.Context, detail *entity.InventoryDetail) error {
+	query := `
+		UPDATE inventory_details
+		SET suggested_value = ?, real_value = ?, stock_received = ?, units_sold = ?, updated_at = NOW()
+		WHERE id = ?
+	`
+
+	_, err := r.db.ExecContext(ctx, query,
+		detail.SuggestedValue,
+		detail.RealValue,
+		detail.StockReceived,
+		detail.UnitsSold,
+		detail.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update inventory detail: %w", err)
+	}
+
+	return nil
+}
+
+// Upsert creates or updates an inventory detail.
+func (r *mysqlInventoryDetailRepository) Upsert(ctx context.Context, detail *entity.InventoryDetail) error {
+	query := `
+		INSERT INTO inventory_details (inventory_id, item_id, suggested_value, real_value, stock_received, units_sold)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			suggested_value = VALUES(suggested_value),
+			real_value = VALUES(real_value),
+			stock_received = VALUES(stock_received),
+			units_sold = VALUES(units_sold),
+			updated_at = NOW()
+	`
+
+	result, err := r.db.ExecContext(ctx, query,
+		detail.InventoryID,
+		detail.ItemID,
+		detail.SuggestedValue,
+		detail.RealValue,
+		detail.StockReceived,
+		detail.UnitsSold,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to upsert inventory detail: %w", err)
+	}
+
+	// Get the ID if it was an insert
+	if detail.ID == 0 {
+		id, err := result.LastInsertId()
+		if err == nil && id > 0 {
+			detail.ID = uint32(id)
+		}
+	}
+
+	return nil
+}
+
+// CreateBatch creates multiple inventory details at once.
+func (r *mysqlInventoryDetailRepository) CreateBatch(ctx context.Context, details []*entity.InventoryDetail) error {
+	if len(details) == 0 {
+		return nil
+	}
+
+	query := `
+		INSERT INTO inventory_details (inventory_id, item_id, suggested_value, real_value, stock_received, units_sold)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, detail := range details {
+		result, err := stmt.ExecContext(ctx,
+			detail.InventoryID,
+			detail.ItemID,
+			detail.SuggestedValue,
+			detail.RealValue,
+			detail.StockReceived,
+			detail.UnitsSold,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert inventory detail: %w", err)
+		}
+
+		id, err := result.LastInsertId()
+		if err != nil {
+			return fmt.Errorf("failed to get last insert id: %w", err)
+		}
+		detail.ID = uint32(id)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// scanDetails is a helper function to scan inventory detail rows.
+func (r *mysqlInventoryDetailRepository) scanDetails(rows *sql.Rows) ([]*entity.InventoryDetail, error) {
+	var details []*entity.InventoryDetail
+	for rows.Next() {
+		var d entity.InventoryDetail
+		var suggestedValue, realValue, stockReceived, unitsSold sql.NullInt32
+
+		if err := rows.Scan(
+			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &d.CreatedAt, &d.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan inventory detail: %w", err)
+		}
+
+		if suggestedValue.Valid {
+			v := uint16(suggestedValue.Int32)
+			d.SuggestedValue = &v
+		}
+		if realValue.Valid {
+			v := uint16(realValue.Int32)
+			d.RealValue = &v
+		}
+		if stockReceived.Valid {
+			v := uint16(stockReceived.Int32)
+			d.StockReceived = &v
+		}
+		if unitsSold.Valid {
+			v := uint16(unitsSold.Int32)
+			d.UnitsSold = &v
+		}
+
+		details = append(details, &d)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating inventory details: %w", err)
+	}
+
+	return details, nil
+}
