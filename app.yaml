@@ -1,0 +1,23 @@
+runtime: go122
+
+instance_class: F1
+
+automatic_scaling:
+  min_instances: 0
+  max_instances: 2
+  target_cpu_utilization: 0.65
+
+env_variables:
+  SERVER_PORT: "8080"
+  DB_HOST: "34.23.218.229"
+  DB_PORT: "3306"
+  DB_USER: "loopi-user"
+  DB_PASSWORD: "7:Z\"I3=9,(VCU1R+"
+  DB_NAME: "loopi"
+  JWT_SECRET: "y4mmCP+GXmkNogRwxzqBKuNO72j29fkr4T65wzCN5Ug="
+  JWT_EXPIRATION_HOURS: "24"
+
+handlers:
+  - url: /.*
+    script: auto
+    secure: always

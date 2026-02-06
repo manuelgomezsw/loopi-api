@@ -27,7 +27,12 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 
 	// CORS configuration
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:4200", "http://127.0.0.1:4200"},
+		AllowedOrigins: []string{
+			"http://localhost:4200",
+			"http://127.0.0.1:4200",
+			"https://loopi-c048d.web.app",
+			"https://loopi-c048d.firebaseapp.com",
+		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID"},
 		ExposedHeaders:   []string{"Link"},
