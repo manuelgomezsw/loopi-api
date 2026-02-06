@@ -19,6 +19,47 @@ func NewMySQLInventoryDetailRepository(db *sql.DB) repository.InventoryDetailRep
 	return &mysqlInventoryDetailRepository{db: db}
 }
 
+// FindByID retrieves an inventory detail by its ID.
+func (r *mysqlInventoryDetailRepository) FindByID(ctx context.Context, id uint32) (*entity.InventoryDetail, error) {
+	query := `
+		SELECT id, inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, created_at, updated_at
+		FROM inventory_details
+		WHERE id = ?
+	`
+
+	var d entity.InventoryDetail
+	var suggestedValue, realValue, stockReceived, unitsSold sql.NullInt32
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &d.CreatedAt, &d.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to find inventory detail by id: %w", err)
+	}
+
+	if suggestedValue.Valid {
+		v := uint16(suggestedValue.Int32)
+		d.SuggestedValue = &v
+	}
+	if realValue.Valid {
+		v := uint16(realValue.Int32)
+		d.RealValue = &v
+	}
+	if stockReceived.Valid {
+		v := uint16(stockReceived.Int32)
+		d.StockReceived = &v
+	}
+	if unitsSold.Valid {
+		v := uint16(unitsSold.Int32)
+		d.UnitsSold = &v
+	}
+
+	return &d, nil
+}
+
 // FindByInventoryID retrieves all details for an inventory.
 func (r *mysqlInventoryDetailRepository) FindByInventoryID(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error) {
 	query := `
@@ -330,6 +371,80 @@ func (r *mysqlInventoryDetailRepository) scanDetails(rows *sql.Rows) ([]*entity.
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating inventory details: %w", err)
+	}
+
+	return details, nil
+}
+
+// GetRecentDiscrepancies retrieves discrepancies from the last N days with item and inventory info.
+func (r *mysqlInventoryDetailRepository) GetRecentDiscrepancies(ctx context.Context, days int) ([]*entity.InventoryDetail, error) {
+	query := `
+		SELECT 
+			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.created_at, d.updated_at,
+			i.id, i.type, i.name, i.active, i.inventory_frequency, i.created_at, i.updated_at,
+			inv.id, inv.inventory_date, inv.inventory_type, inv.schedule, inv.status
+		FROM inventory_details d
+		INNER JOIN items i ON d.item_id = i.id
+		INNER JOIN inventories inv ON d.inventory_id = inv.id
+		WHERE inv.inventory_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+			AND inv.status = 'completed'
+			AND d.suggested_value IS NOT NULL 
+			AND d.real_value IS NOT NULL 
+			AND d.suggested_value != d.real_value
+		ORDER BY inv.inventory_date DESC, i.name
+		LIMIT 20
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, days)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query recent discrepancies: %w", err)
+	}
+	defer rows.Close()
+
+	var details []*entity.InventoryDetail
+	for rows.Next() {
+		var d entity.InventoryDetail
+		var item entity.Item
+		var inv entity.Inventory
+		var suggestedValue, realValue, stockReceived, unitsSold sql.NullInt32
+		var schedule sql.NullString
+
+		if err := rows.Scan(
+			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &d.CreatedAt, &d.UpdatedAt,
+			&item.ID, &item.Type, &item.Name, &item.Active, &item.InventoryFrequency, &item.CreatedAt, &item.UpdatedAt,
+			&inv.ID, &inv.InventoryDate, &inv.InventoryType, &schedule, &inv.Status,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan discrepancy: %w", err)
+		}
+
+		if suggestedValue.Valid {
+			v := uint16(suggestedValue.Int32)
+			d.SuggestedValue = &v
+		}
+		if realValue.Valid {
+			v := uint16(realValue.Int32)
+			d.RealValue = &v
+		}
+		if stockReceived.Valid {
+			v := uint16(stockReceived.Int32)
+			d.StockReceived = &v
+		}
+		if unitsSold.Valid {
+			v := uint16(unitsSold.Int32)
+			d.UnitsSold = &v
+		}
+		if schedule.Valid {
+			s := entity.Schedule(schedule.String)
+			inv.Schedule = &s
+		}
+
+		d.Item = &item
+		d.Inventory = &inv
+		details = append(details, &d)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating discrepancies: %w", err)
 	}
 
 	return details, nil

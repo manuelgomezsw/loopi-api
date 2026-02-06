@@ -15,7 +15,8 @@ type InventoryDetail struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 
 	// Relationships (populated when needed)
-	Item *Item `json:"item,omitempty"`
+	Item      *Item      `json:"item,omitempty"`
+	Inventory *Inventory `json:"inventory,omitempty"`
 }
 
 // HasDiscrepancy returns true if the real value differs from the suggested value.

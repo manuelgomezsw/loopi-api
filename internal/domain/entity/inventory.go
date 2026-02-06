@@ -42,7 +42,12 @@ type Inventory struct {
 
 	// Relationships (populated when needed)
 	Responsible *Employee          `json:"responsible,omitempty"`
+	Employee    *Employee          `json:"employee,omitempty"` // Alias for admin views
 	Details     []*InventoryDetail `json:"details,omitempty"`
+
+	// Computed fields for admin views
+	TotalItems    int `json:"total_items,omitempty"`
+	ItemsWithDiff int `json:"items_with_diff,omitempty"`
 }
 
 // IsCompleted returns true if the inventory is completed.

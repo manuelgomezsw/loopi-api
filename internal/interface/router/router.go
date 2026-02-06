@@ -58,10 +58,16 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 		inventoryIssueRepo,
 		itemRepo,
 	)
+	adminService := service.NewAdminService(
+		inventoryRepo,
+		inventoryDetailRepo,
+		employeeRepo,
+	)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
 	inventoryHandler := handler.NewInventoryHandler(inventoryService)
+	adminHandler := handler.NewAdminHandler(adminService)
 
 	// Health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -107,15 +113,13 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 				r.Use(middleware.AdminOnly)
 
 				// Dashboard
-				r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusOK)
-					w.Write([]byte(`{"message":"dashboard coming soon"}`))
-				})
+				r.Get("/dashboard", adminHandler.GetDashboard)
 
 				// Admin inventories management
 				r.Route("/inventories", func(r chi.Router) {
-					// TODO: Implement in Phase 2
+					r.Get("/", adminHandler.ListInventories)
+					r.Get("/{inventoryID}", adminHandler.GetInventoryDetail)
+					r.Put("/{inventoryID}/details/{detailID}", adminHandler.UpdateInventoryDetail)
 				})
 
 				// Admin items management

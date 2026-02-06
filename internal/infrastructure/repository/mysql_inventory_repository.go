@@ -286,3 +286,182 @@ func (r *mysqlInventoryRepository) Complete(ctx context.Context, id uint32) erro
 
 	return nil
 }
+
+// FindByIDWithEmployee retrieves an inventory by its ID including employee data.
+func (r *mysqlInventoryRepository) FindByIDWithEmployee(ctx context.Context, id uint32) (*entity.Inventory, error) {
+	query := `
+		SELECT i.id, i.inventory_date, i.inventory_type, i.schedule, i.status, i.responsible_id, i.started_at, i.completed_at, i.created_at,
+		       e.id, e.name, e.last_name
+		FROM inventories i
+		JOIN employees e ON i.responsible_id = e.id
+		WHERE i.id = ?
+	`
+
+	var inv entity.Inventory
+	var emp entity.Employee
+	var completedAt sql.NullTime
+	var schedule sql.NullString
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&inv.ID, &inv.InventoryDate, &inv.InventoryType, &schedule, &inv.Status, &inv.ResponsibleID, &inv.StartedAt, &completedAt, &inv.CreatedAt,
+		&emp.ID, &emp.Name, &emp.LastName,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to find inventory with employee: %w", err)
+	}
+
+	if completedAt.Valid {
+		inv.CompletedAt = &completedAt.Time
+	}
+	if schedule.Valid {
+		s := entity.Schedule(schedule.String)
+		inv.Schedule = &s
+	}
+	inv.Employee = &emp
+
+	return &inv, nil
+}
+
+// GetDashboardStats retrieves statistics for the admin dashboard.
+func (r *mysqlInventoryRepository) GetDashboardStats(ctx context.Context) (*repository.DashboardStats, error) {
+	stats := &repository.DashboardStats{}
+
+	// Today's inventories count
+	err := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM inventories WHERE inventory_date = CURDATE()
+	`).Scan(&stats.TodayInventories)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count today inventories: %w", err)
+	}
+
+	// Pending inventories (in_progress)
+	err = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM inventories WHERE status = 'in_progress'
+	`).Scan(&stats.PendingInventories)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count pending inventories: %w", err)
+	}
+
+	// With discrepancies (today, completed)
+	err = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT i.id)
+		FROM inventories i
+		JOIN inventory_details d ON i.id = d.inventory_id
+		WHERE i.inventory_date = CURDATE() 
+		  AND i.status = 'completed'
+		  AND d.suggested_value IS NOT NULL 
+		  AND d.real_value IS NOT NULL 
+		  AND d.suggested_value != d.real_value
+	`).Scan(&stats.WithDiscrepancies)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count with discrepancies: %w", err)
+	}
+
+	// Without discrepancies (today, completed)
+	stats.WithoutDiscrepancies = stats.TodayInventories - stats.WithDiscrepancies - stats.PendingInventories
+	if stats.WithoutDiscrepancies < 0 {
+		stats.WithoutDiscrepancies = 0
+	}
+
+	return stats, nil
+}
+
+// FindAllWithFilters retrieves inventories with optional filters and pagination.
+func (r *mysqlInventoryRepository) FindAllWithFilters(ctx context.Context, dateFrom, dateTo *time.Time, inventoryType *entity.InventoryType, employeeID *uint16, hasDiscrepancies *bool, page, pageSize int) ([]*entity.Inventory, int, error) {
+	// Build query
+	baseQuery := `
+		FROM inventories i
+		JOIN employees e ON i.responsible_id = e.id
+		LEFT JOIN (
+			SELECT inventory_id, 
+			       COUNT(*) as total_items,
+			       SUM(CASE WHEN suggested_value IS NOT NULL AND real_value IS NOT NULL AND suggested_value != real_value THEN 1 ELSE 0 END) as items_with_diff
+			FROM inventory_details
+			GROUP BY inventory_id
+		) d ON i.id = d.inventory_id
+		WHERE 1=1
+	`
+
+	var args []interface{}
+	var conditions string
+
+	if dateFrom != nil {
+		conditions += " AND i.inventory_date >= ?"
+		args = append(args, dateFrom.Format("2006-01-02"))
+	}
+	if dateTo != nil {
+		conditions += " AND i.inventory_date <= ?"
+		args = append(args, dateTo.Format("2006-01-02"))
+	}
+	if inventoryType != nil {
+		conditions += " AND i.inventory_type = ?"
+		args = append(args, *inventoryType)
+	}
+	if employeeID != nil {
+		conditions += " AND i.responsible_id = ?"
+		args = append(args, *employeeID)
+	}
+	if hasDiscrepancies != nil {
+		if *hasDiscrepancies {
+			conditions += " AND COALESCE(d.items_with_diff, 0) > 0"
+		} else {
+			conditions += " AND COALESCE(d.items_with_diff, 0) = 0"
+		}
+	}
+
+	// Count total
+	countQuery := "SELECT COUNT(*) " + baseQuery + conditions
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count inventories: %w", err)
+	}
+
+	// Get paginated results
+	selectQuery := `
+		SELECT i.id, i.inventory_date, i.inventory_type, i.schedule, i.status, i.responsible_id, i.started_at, i.completed_at, i.created_at,
+		       e.id, e.name, e.last_name,
+		       COALESCE(d.total_items, 0), COALESCE(d.items_with_diff, 0)
+	` + baseQuery + conditions + `
+		ORDER BY i.inventory_date DESC, i.started_at DESC
+		LIMIT ? OFFSET ?
+	`
+	args = append(args, pageSize, (page-1)*pageSize)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query inventories: %w", err)
+	}
+	defer rows.Close()
+
+	var inventories []*entity.Inventory
+	for rows.Next() {
+		var inv entity.Inventory
+		var emp entity.Employee
+		var completedAt sql.NullTime
+		var schedule sql.NullString
+
+		err := rows.Scan(
+			&inv.ID, &inv.InventoryDate, &inv.InventoryType, &schedule, &inv.Status, &inv.ResponsibleID, &inv.StartedAt, &completedAt, &inv.CreatedAt,
+			&emp.ID, &emp.Name, &emp.LastName,
+			&inv.TotalItems, &inv.ItemsWithDiff,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan inventory: %w", err)
+		}
+
+		if completedAt.Valid {
+			inv.CompletedAt = &completedAt.Time
+		}
+		if schedule.Valid {
+			s := entity.Schedule(schedule.String)
+			inv.Schedule = &s
+		}
+		inv.Employee = &emp
+		inventories = append(inventories, &inv)
+	}
+
+	return inventories, total, nil
+}

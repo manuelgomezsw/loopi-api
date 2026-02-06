@@ -7,10 +7,21 @@ import (
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 )
 
+// DashboardStats contains statistics for the admin dashboard.
+type DashboardStats struct {
+	TodayInventories     int
+	WithDiscrepancies    int
+	WithoutDiscrepancies int
+	PendingInventories   int
+}
+
 // InventoryRepository defines the interface for inventory data access.
 type InventoryRepository interface {
 	// FindByID retrieves an inventory by its ID.
 	FindByID(ctx context.Context, id uint32) (*entity.Inventory, error)
+
+	// FindByIDWithEmployee retrieves an inventory by its ID including employee data.
+	FindByIDWithEmployee(ctx context.Context, id uint32) (*entity.Inventory, error)
 
 	// FindByDateTypeAndSchedule retrieves an inventory by date, type and schedule.
 	FindByDateTypeAndSchedule(ctx context.Context, date time.Time, inventoryType entity.InventoryType, schedule *entity.Schedule) (*entity.Inventory, error)
@@ -24,6 +35,12 @@ type InventoryRepository interface {
 	// FindPreviousInventory retrieves the previous inventory for calculating suggested values.
 	FindPreviousInventory(ctx context.Context, date time.Time, inventoryType entity.InventoryType, schedule *entity.Schedule) (*entity.Inventory, error)
 
+	// FindAllWithFilters retrieves inventories with optional filters and pagination.
+	FindAllWithFilters(ctx context.Context, dateFrom, dateTo *time.Time, inventoryType *entity.InventoryType, employeeID *uint16, hasDiscrepancies *bool, page, pageSize int) ([]*entity.Inventory, int, error)
+
+	// GetDashboardStats retrieves statistics for the admin dashboard.
+	GetDashboardStats(ctx context.Context) (*DashboardStats, error)
+
 	// Create creates a new inventory.
 	Create(ctx context.Context, inventory *entity.Inventory) error
 
@@ -36,6 +53,9 @@ type InventoryRepository interface {
 
 // InventoryDetailRepository defines the interface for inventory detail data access.
 type InventoryDetailRepository interface {
+	// FindByID retrieves an inventory detail by its ID.
+	FindByID(ctx context.Context, id uint32) (*entity.InventoryDetail, error)
+
 	// FindByInventoryID retrieves all details for an inventory.
 	FindByInventoryID(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error)
 
@@ -47,6 +67,9 @@ type InventoryDetailRepository interface {
 
 	// FindDiscrepancies retrieves details where real_value differs from suggested_value.
 	FindDiscrepancies(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error)
+
+	// GetRecentDiscrepancies retrieves discrepancies from the last N days with item and inventory info.
+	GetRecentDiscrepancies(ctx context.Context, days int) ([]*entity.InventoryDetail, error)
 
 	// Create creates a new inventory detail.
 	Create(ctx context.Context, detail *entity.InventoryDetail) error
