@@ -1,4 +1,3 @@
-// App Engine entry point
 package main
 
 import (

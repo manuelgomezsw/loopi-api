@@ -10,8 +10,7 @@ automatic_scaling:
 
 env_variables:
   SERVER_PORT: "8080"
-  DB_HOST: "34.23.218.229"
-  DB_PORT: "3306"
+  DB_INSTANCE_CONNECTION: "quotes-api-100:us-east1:quotes-instance"
   DB_USER: "loopi-user"
   DB_PASSWORD: "7:Z\"I3=9,(VCU1R+"
   DB_NAME: "loopi"

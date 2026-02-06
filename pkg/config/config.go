@@ -22,11 +22,12 @@ type ServerConfig struct {
 
 // DatabaseConfig holds database-related configuration.
 type DatabaseConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Name     string
+	Host               string
+	Port               string
+	User               string
+	Password           string
+	Name               string
+	InstanceConnection string // For Cloud SQL Unix socket (App Engine)
 }
 
 // JWTConfig holds JWT-related configuration.
@@ -51,11 +52,12 @@ func Load() (*Config, error) {
 			Port: getEnv("SERVER_PORT", "8080"),
 		},
 		Database: DatabaseConfig{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("DB_PORT", "3306"),
-			User:     getEnv("DB_USER", "loopi"),
-			Password: getEnv("DB_PASSWORD", ""),
-			Name:     getEnv("DB_NAME", "loopi"),
+			Host:               getEnv("DB_HOST", "localhost"),
+			Port:               getEnv("DB_PORT", "3306"),
+			User:               getEnv("DB_USER", "loopi"),
+			Password:           getEnv("DB_PASSWORD", ""),
+			Name:               getEnv("DB_NAME", "loopi"),
+			InstanceConnection: getEnv("DB_INSTANCE_CONNECTION", ""),
 		},
 		JWT: JWTConfig{
 			Secret:          getEnv("JWT_SECRET", ""),
@@ -65,7 +67,14 @@ func Load() (*Config, error) {
 }
 
 // DSN returns the database connection string.
+// Uses Unix socket if InstanceConnection is set (for App Engine), otherwise TCP.
 func (c *DatabaseConfig) DSN() string {
+	if c.InstanceConnection != "" {
+		// App Engine: use Unix socket
+		return fmt.Sprintf("%s:%s@unix(/cloudsql/%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+			c.User, c.Password, c.InstanceConnection, c.Name)
+	}
+	// Local development: use TCP
 	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		c.User, c.Password, c.Host, c.Port, c.Name)
 }
