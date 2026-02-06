@@ -1,3 +1,4 @@
+service: loopi
 runtime: go122
 
 instance_class: F1
