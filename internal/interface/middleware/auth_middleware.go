@@ -68,3 +68,22 @@ func GetEmployeeRole(ctx context.Context) (string, bool) {
 	role, ok := ctx.Value(EmployeeRoleKey).(string)
 	return role, ok
 }
+
+// AdminOnly creates a middleware that restricts access to admin users only.
+// Must be used after AuthMiddleware.
+func AdminOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		role, ok := GetEmployeeRole(r.Context())
+		if !ok {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+
+		if role != "admin" {
+			http.Error(w, `{"error":"forbidden: admin access required"}`, http.StatusForbidden)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}

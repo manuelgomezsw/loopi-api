@@ -101,6 +101,33 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 					r.Post("/complete", inventoryHandler.Complete)
 				})
 			})
+
+			// Admin routes (requires admin role)
+			r.Route("/admin", func(r chi.Router) {
+				r.Use(middleware.AdminOnly)
+
+				// Dashboard
+				r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte(`{"message":"dashboard coming soon"}`))
+				})
+
+				// Admin inventories management
+				r.Route("/inventories", func(r chi.Router) {
+					// TODO: Implement in Phase 2
+				})
+
+				// Admin items management
+				r.Route("/items", func(r chi.Router) {
+					// TODO: Implement in Phase 3
+				})
+
+				// Admin employees management
+				r.Route("/employees", func(r chi.Router) {
+					// TODO: Implement in Phase 4
+				})
+			})
 		})
 	})
 
