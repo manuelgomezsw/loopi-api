@@ -62,6 +62,7 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 		inventoryRepo,
 		inventoryDetailRepo,
 		employeeRepo,
+		itemRepo,
 	)
 
 	// Initialize handlers
@@ -95,6 +96,7 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 			// Inventories routes
 			r.Route("/inventories", func(r chi.Router) {
 				r.Get("/latest", inventoryHandler.GetLatest)
+				r.Get("/in-progress", inventoryHandler.GetInProgress)
 				r.Get("/suggested-schedule", inventoryHandler.GetSuggestedSchedule)
 				r.Post("/", inventoryHandler.Create)
 
@@ -124,12 +126,21 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 
 				// Admin items management
 				r.Route("/items", func(r chi.Router) {
-					// TODO: Implement in Phase 3
+					r.Get("/", adminHandler.ListItems)
+					r.Post("/", adminHandler.CreateItem)
+					r.Get("/{itemID}", adminHandler.GetItem)
+					r.Put("/{itemID}", adminHandler.UpdateItem)
+					r.Patch("/{itemID}/status", adminHandler.UpdateItemStatus)
 				})
 
 				// Admin employees management
 				r.Route("/employees", func(r chi.Router) {
-					// TODO: Implement in Phase 4
+					r.Get("/", adminHandler.ListEmployees)
+					r.Post("/", adminHandler.CreateEmployee)
+					r.Get("/{employeeID}", adminHandler.GetEmployee)
+					r.Put("/{employeeID}", adminHandler.UpdateEmployee)
+					r.Patch("/{employeeID}/status", adminHandler.UpdateEmployeeStatus)
+					r.Post("/{employeeID}/reset-password", adminHandler.ResetEmployeePassword)
 				})
 			})
 		})

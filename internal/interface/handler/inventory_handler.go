@@ -75,6 +75,45 @@ func (h *InventoryHandler) GetLatest(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{"inventory": resp})
 }
 
+// GetInProgress handles GET /api/inventories/in-progress.
+func (h *InventoryHandler) GetInProgress(w http.ResponseWriter, r *http.Request) {
+	employeeID, ok := middleware.GetEmployeeID(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	inventories, err := h.inventoryService.GetInProgress(r.Context(), employeeID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to get in-progress inventories")
+		return
+	}
+
+	items := make([]response.InProgressInventoryResponse, 0, len(inventories))
+	for _, inv := range inventories {
+		var schedule *string
+		if inv.Schedule != nil {
+			s := string(*inv.Schedule)
+			schedule = &s
+		}
+
+		items = append(items, response.InProgressInventoryResponse{
+			ID:            inv.ID,
+			InventoryDate: inv.InventoryDate.Format("2006-01-02"),
+			InventoryType: string(inv.InventoryType),
+			Schedule:      schedule,
+			StartedAt:     inv.StartedAt,
+		})
+	}
+
+	resp := response.InProgressInventoriesResponse{
+		Inventories: items,
+		Count:       len(items),
+	}
+
+	respondJSON(w, http.StatusOK, resp)
+}
+
 // Create handles POST /api/inventories.
 func (h *InventoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req request.CreateInventoryRequest

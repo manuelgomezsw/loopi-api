@@ -7,6 +7,7 @@ import (
 
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // AdminService handles admin-specific operations.
@@ -14,6 +15,7 @@ type AdminService struct {
 	inventoryRepo       repository.InventoryRepository
 	inventoryDetailRepo repository.InventoryDetailRepository
 	employeeRepo        repository.EmployeeRepository
+	itemRepo            repository.ItemRepository
 }
 
 // NewAdminService creates a new admin service.
@@ -21,11 +23,13 @@ func NewAdminService(
 	inventoryRepo repository.InventoryRepository,
 	inventoryDetailRepo repository.InventoryDetailRepository,
 	employeeRepo repository.EmployeeRepository,
+	itemRepo repository.ItemRepository,
 ) *AdminService {
 	return &AdminService{
 		inventoryRepo:       inventoryRepo,
 		inventoryDetailRepo: inventoryDetailRepo,
 		employeeRepo:        employeeRepo,
+		itemRepo:            itemRepo,
 	}
 }
 
@@ -280,4 +284,406 @@ func (s *AdminService) UpdateInventoryDetail(ctx context.Context, inventoryID ui
 	}
 
 	return nil
+}
+
+// --- Item Management ---
+
+// ItemFilter contains filters for listing items.
+type ItemFilter struct {
+	Type      *entity.ItemType           `json:"type"`
+	Frequency *entity.InventoryFrequency `json:"frequency"`
+	Active    *bool                      `json:"active"`
+	Search    string                     `json:"search"`
+	Page      int                        `json:"page"`
+	PageSize  int                        `json:"page_size"`
+}
+
+// ItemListResult contains paginated item results.
+type ItemListResult struct {
+	Items      []*entity.Item `json:"items"`
+	Total      int            `json:"total"`
+	Page       int            `json:"page"`
+	PageSize   int            `json:"page_size"`
+	TotalPages int            `json:"total_pages"`
+}
+
+// CreateItemRequest contains data for creating an item.
+type CreateItemRequest struct {
+	Type               entity.ItemType           `json:"type"`
+	Name               string                    `json:"name"`
+	InventoryFrequency entity.InventoryFrequency `json:"inventory_frequency"`
+}
+
+// UpdateItemRequest contains data for updating an item.
+type UpdateItemRequest struct {
+	Type               entity.ItemType           `json:"type"`
+	Name               string                    `json:"name"`
+	InventoryFrequency entity.InventoryFrequency `json:"inventory_frequency"`
+	Active             bool                      `json:"active"`
+}
+
+// ListItems retrieves items with filters and pagination.
+func (s *AdminService) ListItems(ctx context.Context, filter ItemFilter) (*ItemListResult, error) {
+	if filter.Page < 1 {
+		filter.Page = 1
+	}
+	if filter.PageSize < 1 || filter.PageSize > 100 {
+		filter.PageSize = 20
+	}
+
+	items, total, err := s.itemRepo.FindAllWithFilters(ctx, filter.Type, filter.Frequency, filter.Active, filter.Search, filter.Page, filter.PageSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list items: %w", err)
+	}
+
+	totalPages := total / filter.PageSize
+	if total%filter.PageSize > 0 {
+		totalPages++
+	}
+
+	return &ItemListResult{
+		Items:      items,
+		Total:      total,
+		Page:       filter.Page,
+		PageSize:   filter.PageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// GetItem retrieves a single item by ID.
+func (s *AdminService) GetItem(ctx context.Context, id uint16) (*entity.Item, error) {
+	item, err := s.itemRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get item: %w", err)
+	}
+	if item == nil {
+		return nil, fmt.Errorf("item not found")
+	}
+	return item, nil
+}
+
+// CreateItem creates a new item.
+func (s *AdminService) CreateItem(ctx context.Context, req CreateItemRequest) (*entity.Item, error) {
+	if req.Name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+	if req.Type != entity.ItemTypeProduct && req.Type != entity.ItemTypeSupply {
+		return nil, fmt.Errorf("invalid item type")
+	}
+	if req.InventoryFrequency != entity.InventoryFrequencyDaily &&
+		req.InventoryFrequency != entity.InventoryFrequencyWeekly &&
+		req.InventoryFrequency != entity.InventoryFrequencyMonthly {
+		return nil, fmt.Errorf("invalid inventory frequency")
+	}
+
+	item := &entity.Item{
+		Type:               req.Type,
+		Name:               req.Name,
+		Active:             true,
+		InventoryFrequency: req.InventoryFrequency,
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
+	}
+
+	if err := s.itemRepo.Create(ctx, item); err != nil {
+		return nil, fmt.Errorf("failed to create item: %w", err)
+	}
+
+	return item, nil
+}
+
+// UpdateItem updates an existing item.
+func (s *AdminService) UpdateItem(ctx context.Context, id uint16, req UpdateItemRequest) (*entity.Item, error) {
+	item, err := s.itemRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get item: %w", err)
+	}
+	if item == nil {
+		return nil, fmt.Errorf("item not found")
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+	if req.Type != entity.ItemTypeProduct && req.Type != entity.ItemTypeSupply {
+		return nil, fmt.Errorf("invalid item type")
+	}
+	if req.InventoryFrequency != entity.InventoryFrequencyDaily &&
+		req.InventoryFrequency != entity.InventoryFrequencyWeekly &&
+		req.InventoryFrequency != entity.InventoryFrequencyMonthly {
+		return nil, fmt.Errorf("invalid inventory frequency")
+	}
+
+	item.Type = req.Type
+	item.Name = req.Name
+	item.InventoryFrequency = req.InventoryFrequency
+	item.Active = req.Active
+	item.UpdatedAt = time.Now()
+
+	if err := s.itemRepo.Update(ctx, item); err != nil {
+		return nil, fmt.Errorf("failed to update item: %w", err)
+	}
+
+	return item, nil
+}
+
+// UpdateItemStatus updates the active status of an item.
+func (s *AdminService) UpdateItemStatus(ctx context.Context, id uint16, active bool) error {
+	item, err := s.itemRepo.FindByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get item: %w", err)
+	}
+	if item == nil {
+		return fmt.Errorf("item not found")
+	}
+
+	if err := s.itemRepo.UpdateStatus(ctx, id, active); err != nil {
+		return fmt.Errorf("failed to update item status: %w", err)
+	}
+
+	return nil
+}
+
+// --- Employee Management ---
+
+// EmployeeFilter contains filters for listing employees.
+type EmployeeFilter struct {
+	Role     *entity.Role `json:"role"`
+	Active   *bool        `json:"active"`
+	Search   string       `json:"search"`
+	Page     int          `json:"page"`
+	PageSize int          `json:"page_size"`
+}
+
+// EmployeeListResult contains paginated employee results.
+type EmployeeListResult struct {
+	Employees  []*entity.Employee `json:"employees"`
+	Total      int                `json:"total"`
+	Page       int                `json:"page"`
+	PageSize   int                `json:"page_size"`
+	TotalPages int                `json:"total_pages"`
+}
+
+// CreateEmployeeRequest contains data for creating an employee.
+type CreateEmployeeRequest struct {
+	Username       string       `json:"username"`
+	Password       string       `json:"password"`
+	Name           string       `json:"name"`
+	LastName       string       `json:"last_name"`
+	DocumentType   *string      `json:"document_type"`
+	DocumentNumber *string      `json:"document_number"`
+	Phone          *string      `json:"phone"`
+	Email          *string      `json:"email"`
+	BirthDate      *time.Time   `json:"birth_date"`
+	Role           entity.Role  `json:"role"`
+}
+
+// UpdateEmployeeRequest contains data for updating an employee.
+type UpdateEmployeeRequest struct {
+	Username       string       `json:"username"`
+	Name           string       `json:"name"`
+	LastName       string       `json:"last_name"`
+	DocumentType   *string      `json:"document_type"`
+	DocumentNumber *string      `json:"document_number"`
+	Phone          *string      `json:"phone"`
+	Email          *string      `json:"email"`
+	BirthDate      *time.Time   `json:"birth_date"`
+	Role           entity.Role  `json:"role"`
+	Active         bool         `json:"active"`
+}
+
+// ListEmployees retrieves employees with filters and pagination.
+func (s *AdminService) ListEmployees(ctx context.Context, filter EmployeeFilter) (*EmployeeListResult, error) {
+	if filter.Page < 1 {
+		filter.Page = 1
+	}
+	if filter.PageSize < 1 || filter.PageSize > 100 {
+		filter.PageSize = 20
+	}
+
+	employees, total, err := s.employeeRepo.FindAllWithFilters(ctx, filter.Role, filter.Active, filter.Search, filter.Page, filter.PageSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list employees: %w", err)
+	}
+
+	totalPages := total / filter.PageSize
+	if total%filter.PageSize > 0 {
+		totalPages++
+	}
+
+	return &EmployeeListResult{
+		Employees:  employees,
+		Total:      total,
+		Page:       filter.Page,
+		PageSize:   filter.PageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// GetEmployee retrieves a single employee by ID.
+func (s *AdminService) GetEmployee(ctx context.Context, id uint16) (*entity.Employee, error) {
+	employee, err := s.employeeRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get employee: %w", err)
+	}
+	if employee == nil {
+		return nil, fmt.Errorf("employee not found")
+	}
+	return employee, nil
+}
+
+// CreateEmployee creates a new employee.
+func (s *AdminService) CreateEmployee(ctx context.Context, req CreateEmployeeRequest) (*entity.Employee, error) {
+	if req.Username == "" {
+		return nil, fmt.Errorf("username is required")
+	}
+	if req.Password == "" {
+		return nil, fmt.Errorf("password is required")
+	}
+	if req.Name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+	if req.LastName == "" {
+		return nil, fmt.Errorf("last name is required")
+	}
+	if req.Role != entity.RoleEmployee && req.Role != entity.RoleAdmin {
+		return nil, fmt.Errorf("invalid role")
+	}
+
+	// Check if username already exists
+	existing, err := s.employeeRepo.FindByUsername(ctx, req.Username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check username: %w", err)
+	}
+	if existing != nil {
+		return nil, fmt.Errorf("username already exists")
+	}
+
+	// Hash password
+	passwordHash, err := hashPassword(req.Password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	employee := &entity.Employee{
+		Username:       req.Username,
+		PasswordHash:   passwordHash,
+		Name:           req.Name,
+		LastName:       req.LastName,
+		DocumentType:   req.DocumentType,
+		DocumentNumber: req.DocumentNumber,
+		Phone:          req.Phone,
+		Email:          req.Email,
+		BirthDate:      req.BirthDate,
+		Role:           req.Role,
+		Active:         true,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+
+	if err := s.employeeRepo.Create(ctx, employee); err != nil {
+		return nil, fmt.Errorf("failed to create employee: %w", err)
+	}
+
+	return employee, nil
+}
+
+// UpdateEmployee updates an existing employee.
+func (s *AdminService) UpdateEmployee(ctx context.Context, id uint16, req UpdateEmployeeRequest) (*entity.Employee, error) {
+	employee, err := s.employeeRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get employee: %w", err)
+	}
+	if employee == nil {
+		return nil, fmt.Errorf("employee not found")
+	}
+
+	if req.Username == "" {
+		return nil, fmt.Errorf("username is required")
+	}
+	if req.Name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+	if req.LastName == "" {
+		return nil, fmt.Errorf("last name is required")
+	}
+	if req.Role != entity.RoleEmployee && req.Role != entity.RoleAdmin {
+		return nil, fmt.Errorf("invalid role")
+	}
+
+	employee.Username = req.Username
+	employee.Name = req.Name
+	employee.LastName = req.LastName
+	employee.DocumentType = req.DocumentType
+	employee.DocumentNumber = req.DocumentNumber
+	employee.Phone = req.Phone
+	employee.Email = req.Email
+	employee.BirthDate = req.BirthDate
+	employee.Role = req.Role
+	employee.Active = req.Active
+	employee.UpdatedAt = time.Now()
+
+	if err := s.employeeRepo.Update(ctx, employee); err != nil {
+		return nil, fmt.Errorf("failed to update employee: %w", err)
+	}
+
+	return employee, nil
+}
+
+// UpdateEmployeeStatus updates the active status of an employee.
+func (s *AdminService) UpdateEmployeeStatus(ctx context.Context, id uint16, active bool) error {
+	employee, err := s.employeeRepo.FindByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get employee: %w", err)
+	}
+	if employee == nil {
+		return fmt.Errorf("employee not found")
+	}
+
+	if err := s.employeeRepo.UpdateStatus(ctx, id, active); err != nil {
+		return fmt.Errorf("failed to update employee status: %w", err)
+	}
+
+	return nil
+}
+
+// ResetEmployeePassword resets an employee's password to default (document_number + birth_year).
+func (s *AdminService) ResetEmployeePassword(ctx context.Context, id uint16) error {
+	employee, err := s.employeeRepo.FindByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get employee: %w", err)
+	}
+	if employee == nil {
+		return fmt.Errorf("employee not found")
+	}
+
+	// Generate default password: document_number + birth_year
+	var defaultPassword string
+	if employee.DocumentNumber != nil && employee.BirthDate != nil {
+		defaultPassword = *employee.DocumentNumber + fmt.Sprintf("%d", employee.BirthDate.Year())
+	} else if employee.DocumentNumber != nil {
+		defaultPassword = *employee.DocumentNumber
+	} else {
+		defaultPassword = "password123" // Fallback if no document
+	}
+
+	passwordHash, err := hashPassword(defaultPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	if err := s.employeeRepo.UpdatePassword(ctx, id, passwordHash); err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	return nil
+}
+
+// hashPassword hashes a password using bcrypt.
+func hashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(bytes), nil
 }

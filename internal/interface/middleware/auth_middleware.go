@@ -46,10 +46,9 @@ func AuthMiddleware(jwtManager *auth.JWTManager) func(http.Handler) http.Handler
 				http.Error(w, `{"error":"invalid or expired token"}`, http.StatusUnauthorized)
 				return
 			}
-
-			// Add claims to context
+			// Add claims to context (convert Role to string for type assertion)
 			ctx := context.WithValue(r.Context(), EmployeeIDKey, claims.EmployeeID)
-			ctx = context.WithValue(ctx, EmployeeRoleKey, claims.Role)
+			ctx = context.WithValue(ctx, EmployeeRoleKey, string(claims.Role))
 			ctx = context.WithValue(ctx, EmployeeUsernameKey, claims.Username)
 
 			next.ServeHTTP(w, r.WithContext(ctx))

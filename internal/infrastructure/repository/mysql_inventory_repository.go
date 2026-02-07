@@ -115,6 +115,55 @@ func (r *mysqlInventoryRepository) FindLatestCompleted(ctx context.Context) (*en
 	return inv, nil
 }
 
+// FindInProgressByEmployee retrieves in-progress inventories for an employee.
+func (r *mysqlInventoryRepository) FindInProgressByEmployee(ctx context.Context, employeeID uint16) ([]*entity.Inventory, error) {
+	query := `
+		SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
+		FROM inventories
+		WHERE status = 'in_progress' AND responsible_id = ?
+		ORDER BY started_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, employeeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find in-progress inventories: %w", err)
+	}
+	defer rows.Close()
+
+	var inventories []*entity.Inventory
+	for rows.Next() {
+		var inv entity.Inventory
+		var completedAt sql.NullTime
+		var schedule sql.NullString
+
+		err := rows.Scan(
+			&inv.ID,
+			&inv.InventoryDate,
+			&inv.InventoryType,
+			&schedule,
+			&inv.Status,
+			&inv.ResponsibleID,
+			&inv.StartedAt,
+			&completedAt,
+			&inv.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan inventory: %w", err)
+		}
+
+		if completedAt.Valid {
+			inv.CompletedAt = &completedAt.Time
+		}
+		if schedule.Valid {
+			s := entity.Schedule(schedule.String)
+			inv.Schedule = &s
+		}
+		inventories = append(inventories, &inv)
+	}
+
+	return inventories, nil
+}
+
 // FindLatestByType retrieves the most recent completed inventory for a specific type.
 func (r *mysqlInventoryRepository) FindLatestByType(ctx context.Context, inventoryType entity.InventoryType) (*entity.Inventory, error) {
 	query := `

@@ -103,3 +103,18 @@ type SaveDetailResponse struct {
 	Saved          bool    `json:"saved"`
 	SuggestedValue *uint16 `json:"suggested_value,omitempty"`
 }
+
+// InProgressInventoryResponse represents an in-progress inventory.
+type InProgressInventoryResponse struct {
+	ID            uint32    `json:"id"`
+	InventoryDate string    `json:"inventory_date"`
+	InventoryType string    `json:"inventory_type"`
+	Schedule      *string   `json:"schedule,omitempty"`
+	StartedAt     time.Time `json:"started_at"`
+}
+
+// InProgressInventoriesResponse represents the list of in-progress inventories.
+type InProgressInventoriesResponse struct {
+	Inventories []InProgressInventoryResponse `json:"inventories"`
+	Count       int                           `json:"count"`
+}

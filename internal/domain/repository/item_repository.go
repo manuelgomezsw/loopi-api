@@ -22,4 +22,16 @@ type ItemRepository interface {
 	// - weekly: items with inventory_frequency IN ('daily', 'weekly')
 	// - monthly: all active items
 	FindActiveByInventoryType(ctx context.Context, inventoryType entity.InventoryType) ([]*entity.Item, error)
+
+	// FindAllWithFilters retrieves items with optional filters and pagination.
+	FindAllWithFilters(ctx context.Context, itemType *entity.ItemType, frequency *entity.InventoryFrequency, active *bool, search string, page, pageSize int) ([]*entity.Item, int, error)
+
+	// Create creates a new item.
+	Create(ctx context.Context, item *entity.Item) error
+
+	// Update updates an existing item.
+	Update(ctx context.Context, item *entity.Item) error
+
+	// UpdateStatus updates the active status of an item.
+	UpdateStatus(ctx context.Context, id uint16, active bool) error
 }

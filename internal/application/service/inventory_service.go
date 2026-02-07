@@ -74,6 +74,15 @@ func (s *InventoryService) GetLatestCompleted(ctx context.Context) (*entity.Inve
 	return inv, nil
 }
 
+// GetInProgress returns in-progress inventories for an employee.
+func (s *InventoryService) GetInProgress(ctx context.Context, employeeID uint16) ([]*entity.Inventory, error) {
+	inventories, err := s.inventoryRepo.FindInProgressByEmployee(ctx, employeeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get in-progress inventories: %w", err)
+	}
+	return inventories, nil
+}
+
 // CreateInventory creates a new inventory and pre-populates items with suggested values.
 func (s *InventoryService) CreateInventory(ctx context.Context, inventoryType entity.InventoryType, schedule *entity.Schedule, date time.Time, responsibleID uint16) (*entity.Inventory, error) {
 	// Validate: daily inventories require a schedule

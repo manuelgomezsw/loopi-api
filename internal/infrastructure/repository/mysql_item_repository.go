@@ -135,3 +135,115 @@ func (r *mysqlItemRepository) queryItems(ctx context.Context, query string, args
 
 	return items, nil
 }
+
+// FindAllWithFilters retrieves items with optional filters and pagination.
+func (r *mysqlItemRepository) FindAllWithFilters(ctx context.Context, itemType *entity.ItemType, frequency *entity.InventoryFrequency, active *bool, search string, page, pageSize int) ([]*entity.Item, int, error) {
+	baseQuery := " FROM items WHERE 1=1"
+	var args []interface{}
+
+	if itemType != nil {
+		baseQuery += " AND type = ?"
+		args = append(args, *itemType)
+	}
+	if frequency != nil {
+		baseQuery += " AND inventory_frequency = ?"
+		args = append(args, *frequency)
+	}
+	if active != nil {
+		baseQuery += " AND active = ?"
+		args = append(args, *active)
+	}
+	if search != "" {
+		baseQuery += " AND name LIKE ?"
+		args = append(args, "%"+search+"%")
+	}
+
+	// Count total
+	var total int
+	countQuery := "SELECT COUNT(*)" + baseQuery
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count items: %w", err)
+	}
+
+	// Get paginated results
+	selectQuery := "SELECT id, type, name, active, inventory_frequency, created_at, updated_at" + baseQuery + " ORDER BY type, name LIMIT ? OFFSET ?"
+	args = append(args, pageSize, (page-1)*pageSize)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query items: %w", err)
+	}
+	defer rows.Close()
+
+	var items []*entity.Item
+	for rows.Next() {
+		var item entity.Item
+		if err := rows.Scan(
+			&item.ID,
+			&item.Type,
+			&item.Name,
+			&item.Active,
+			&item.InventoryFrequency,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, 0, fmt.Errorf("failed to scan item: %w", err)
+		}
+		items = append(items, &item)
+	}
+
+	return items, total, nil
+}
+
+// Create creates a new item.
+func (r *mysqlItemRepository) Create(ctx context.Context, item *entity.Item) error {
+	query := `
+		INSERT INTO items (type, name, active, inventory_frequency)
+		VALUES (?, ?, ?, ?)
+	`
+
+	result, err := r.db.ExecContext(ctx, query, item.Type, item.Name, item.Active, item.InventoryFrequency)
+	if err != nil {
+		return fmt.Errorf("failed to create item: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("failed to get last insert id: %w", err)
+	}
+
+	item.ID = uint16(id)
+	return nil
+}
+
+// Update updates an existing item.
+func (r *mysqlItemRepository) Update(ctx context.Context, item *entity.Item) error {
+	query := `
+		UPDATE items
+		SET type = ?, name = ?, active = ?, inventory_frequency = ?, updated_at = NOW()
+		WHERE id = ?
+	`
+
+	_, err := r.db.ExecContext(ctx, query, item.Type, item.Name, item.Active, item.InventoryFrequency, item.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update item: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateStatus updates the active status of an item.
+func (r *mysqlItemRepository) UpdateStatus(ctx context.Context, id uint16, active bool) error {
+	query := `
+		UPDATE items
+		SET active = ?, updated_at = NOW()
+		WHERE id = ?
+	`
+
+	_, err := r.db.ExecContext(ctx, query, active, id)
+	if err != nil {
+		return fmt.Errorf("failed to update item status: %w", err)
+	}
+
+	return nil
+}

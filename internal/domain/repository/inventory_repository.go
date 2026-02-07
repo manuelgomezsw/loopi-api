@@ -29,6 +29,9 @@ type InventoryRepository interface {
 	// FindLatestCompleted retrieves the most recent completed inventory.
 	FindLatestCompleted(ctx context.Context) (*entity.Inventory, error)
 
+	// FindInProgressByEmployee retrieves in-progress inventories for an employee.
+	FindInProgressByEmployee(ctx context.Context, employeeID uint16) ([]*entity.Inventory, error)
+
 	// FindLatestByType retrieves the most recent completed inventory for a specific type.
 	FindLatestByType(ctx context.Context, inventoryType entity.InventoryType) (*entity.Inventory, error)
 

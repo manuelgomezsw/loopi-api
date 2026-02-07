@@ -60,7 +60,7 @@ func Load() (*Config, error) {
 			InstanceConnection: getEnv("DB_INSTANCE_CONNECTION", ""),
 		},
 		JWT: JWTConfig{
-			Secret:          getEnv("JWT_SECRET", ""),
+			Secret:          getEnv("JWT_SECRET", "dev-secret-key-change-in-production"),
 			ExpirationHours: jwtExpHours,
 		},
 	}, nil
