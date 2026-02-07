@@ -221,9 +221,12 @@ func (h *AdminHandler) GetItem(w http.ResponseWriter, r *http.Request) {
 
 // CreateItemRequest is the request body for creating an item.
 type CreateItemRequest struct {
-	Type               string `json:"type"`
-	Name               string `json:"name"`
-	InventoryFrequency string `json:"inventory_frequency"`
+	Type               string  `json:"type"`
+	Name               string  `json:"name"`
+	InventoryFrequency string  `json:"inventory_frequency"`
+	CategoryID         uint16  `json:"category_id"`
+	SupplierID         *uint16 `json:"supplier_id"`
+	Cost               uint32  `json:"cost"`
 }
 
 // CreateItem creates a new item.
@@ -238,6 +241,9 @@ func (h *AdminHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 		Type:               entity.ItemType(req.Type),
 		Name:               req.Name,
 		InventoryFrequency: entity.InventoryFrequency(req.InventoryFrequency),
+		CategoryID:         req.CategoryID,
+		SupplierID:         req.SupplierID,
+		Cost:               req.Cost,
 	}
 
 	item, err := h.adminService.CreateItem(r.Context(), serviceReq)
@@ -253,10 +259,13 @@ func (h *AdminHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 
 // UpdateItemRequest is the request body for updating an item.
 type UpdateItemRequest struct {
-	Type               string `json:"type"`
-	Name               string `json:"name"`
-	InventoryFrequency string `json:"inventory_frequency"`
-	Active             bool   `json:"active"`
+	Type               string  `json:"type"`
+	Name               string  `json:"name"`
+	InventoryFrequency string  `json:"inventory_frequency"`
+	Active             bool    `json:"active"`
+	CategoryID         uint16  `json:"category_id"`
+	SupplierID         *uint16 `json:"supplier_id"`
+	Cost               uint32  `json:"cost"`
 }
 
 // UpdateItem updates an existing item.
@@ -279,6 +288,9 @@ func (h *AdminHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		Name:               req.Name,
 		InventoryFrequency: entity.InventoryFrequency(req.InventoryFrequency),
 		Active:             req.Active,
+		CategoryID:         req.CategoryID,
+		SupplierID:         req.SupplierID,
+		Cost:               req.Cost,
 	}
 
 	item, err := h.adminService.UpdateItem(r.Context(), uint16(id), serviceReq)
@@ -536,6 +548,349 @@ func (h *AdminHandler) ResetEmployeePassword(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := h.adminService.ResetEmployeePassword(r.Context(), uint16(id)); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"success":true}`))
+}
+
+// --- Category Handlers ---
+
+// ListCategories returns all categories ordered by display_order.
+func (h *AdminHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
+	categories, err := h.adminService.ListCategories(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to list categories"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"categories": categories,
+		"total":      len(categories),
+	})
+}
+
+// GetCategory returns a single category by ID.
+func (h *AdminHandler) GetCategory(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "categoryID")
+	id, err := strconv.ParseUint(idStr, 10, 16)
+	if err != nil {
+		http.Error(w, `{"error":"invalid category ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	category, err := h.adminService.GetCategory(r.Context(), uint16(id))
+	if err != nil {
+		http.Error(w, `{"error":"category not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(category)
+}
+
+// CreateCategoryRequest is the request body for creating a category.
+type CreateCategoryRequest struct {
+	Name string `json:"name"`
+}
+
+// CreateCategory creates a new category.
+func (h *AdminHandler) CreateCategory(w http.ResponseWriter, r *http.Request) {
+	var req CreateCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	serviceReq := service.CreateCategoryRequest{
+		Name: req.Name,
+	}
+
+	category, err := h.adminService.CreateCategory(r.Context(), serviceReq)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(category)
+}
+
+// UpdateCategoryRequest is the request body for updating a category.
+type UpdateCategoryRequest struct {
+	Name   string `json:"name"`
+	Active bool   `json:"active"`
+}
+
+// UpdateCategory updates an existing category.
+func (h *AdminHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "categoryID")
+	id, err := strconv.ParseUint(idStr, 10, 16)
+	if err != nil {
+		http.Error(w, `{"error":"invalid category ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req UpdateCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	serviceReq := service.UpdateCategoryRequest{
+		Name:   req.Name,
+		Active: req.Active,
+	}
+
+	category, err := h.adminService.UpdateCategory(r.Context(), uint16(id), serviceReq)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(category)
+}
+
+// UpdateCategoryStatusRequest is the request body for updating category status.
+type UpdateCategoryStatusRequest struct {
+	Active bool `json:"active"`
+}
+
+// UpdateCategoryStatus updates the active status of a category.
+func (h *AdminHandler) UpdateCategoryStatus(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "categoryID")
+	id, err := strconv.ParseUint(idStr, 10, 16)
+	if err != nil {
+		http.Error(w, `{"error":"invalid category ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req UpdateCategoryStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.adminService.UpdateCategoryStatus(r.Context(), uint16(id), req.Active); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"success":true}`))
+}
+
+// ReorderCategoriesRequest is the request body for reordering categories.
+type ReorderCategoriesRequest struct {
+	Orders []struct {
+		ID           uint16 `json:"id"`
+		DisplayOrder int    `json:"display_order"`
+	} `json:"orders"`
+}
+
+// ReorderCategories updates the display order of multiple categories.
+func (h *AdminHandler) ReorderCategories(w http.ResponseWriter, r *http.Request) {
+	var req ReorderCategoriesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	serviceReq := service.ReorderCategoryRequest{
+		Orders: make([]service.CategoryOrderItem, len(req.Orders)),
+	}
+	for i, o := range req.Orders {
+		serviceReq.Orders[i] = service.CategoryOrderItem{
+			ID:           o.ID,
+			DisplayOrder: o.DisplayOrder,
+		}
+	}
+
+	if err := h.adminService.ReorderCategories(r.Context(), serviceReq); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"success":true}`))
+}
+
+// --- Supplier Handlers ---
+
+// ListSuppliers returns a paginated list of suppliers with filters.
+func (h *AdminHandler) ListSuppliers(w http.ResponseWriter, r *http.Request) {
+	filter := service.SupplierFilter{
+		Page:     1,
+		PageSize: 20,
+	}
+
+	// Parse query parameters
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			filter.Page = p
+		}
+	}
+	if pageSizeStr := r.URL.Query().Get("page_size"); pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 100 {
+			filter.PageSize = ps
+		}
+	}
+	if activeStr := r.URL.Query().Get("active"); activeStr != "" {
+		active := activeStr == "true"
+		filter.Active = &active
+	}
+	filter.Search = r.URL.Query().Get("search")
+
+	result, err := h.adminService.ListSuppliers(r.Context(), filter)
+	if err != nil {
+		http.Error(w, `{"error":"failed to list suppliers"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// ListAllActiveSuppliers returns all active suppliers for dropdowns.
+func (h *AdminHandler) ListAllActiveSuppliers(w http.ResponseWriter, r *http.Request) {
+	suppliers, err := h.adminService.ListAllActiveSuppliers(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to list suppliers"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"suppliers": suppliers,
+		"total":     len(suppliers),
+	})
+}
+
+// GetSupplier returns a single supplier by ID.
+func (h *AdminHandler) GetSupplier(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "supplierID")
+	id, err := strconv.ParseUint(idStr, 10, 16)
+	if err != nil {
+		http.Error(w, `{"error":"invalid supplier ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	supplier, err := h.adminService.GetSupplier(r.Context(), uint16(id))
+	if err != nil {
+		http.Error(w, `{"error":"supplier not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(supplier)
+}
+
+// CreateSupplierRequest is the request body for creating a supplier.
+type CreateSupplierRequest struct {
+	BusinessName string `json:"business_name"`
+	TaxID        string `json:"tax_id"`
+	ContactName  string `json:"contact_name"`
+	ContactPhone string `json:"contact_phone"`
+	ContactEmail string `json:"contact_email"`
+}
+
+// CreateSupplier creates a new supplier.
+func (h *AdminHandler) CreateSupplier(w http.ResponseWriter, r *http.Request) {
+	var req CreateSupplierRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	serviceReq := service.CreateSupplierRequest{
+		BusinessName: req.BusinessName,
+		TaxID:        req.TaxID,
+		ContactName:  req.ContactName,
+		ContactPhone: req.ContactPhone,
+		ContactEmail: req.ContactEmail,
+	}
+
+	supplier, err := h.adminService.CreateSupplier(r.Context(), serviceReq)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(supplier)
+}
+
+// UpdateSupplierRequest is the request body for updating a supplier.
+type UpdateSupplierRequest struct {
+	BusinessName string `json:"business_name"`
+	TaxID        string `json:"tax_id"`
+	ContactName  string `json:"contact_name"`
+	ContactPhone string `json:"contact_phone"`
+	ContactEmail string `json:"contact_email"`
+	Active       bool   `json:"active"`
+}
+
+// UpdateSupplier updates an existing supplier.
+func (h *AdminHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "supplierID")
+	id, err := strconv.ParseUint(idStr, 10, 16)
+	if err != nil {
+		http.Error(w, `{"error":"invalid supplier ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req UpdateSupplierRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	serviceReq := service.UpdateSupplierRequest{
+		BusinessName: req.BusinessName,
+		TaxID:        req.TaxID,
+		ContactName:  req.ContactName,
+		ContactPhone: req.ContactPhone,
+		ContactEmail: req.ContactEmail,
+		Active:       req.Active,
+	}
+
+	supplier, err := h.adminService.UpdateSupplier(r.Context(), uint16(id), serviceReq)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(supplier)
+}
+
+// UpdateSupplierStatusRequest is the request body for updating supplier status.
+type UpdateSupplierStatusRequest struct {
+	Active bool `json:"active"`
+}
+
+// UpdateSupplierStatus updates the active status of a supplier.
+func (h *AdminHandler) UpdateSupplierStatus(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "supplierID")
+	id, err := strconv.ParseUint(idStr, 10, 16)
+	if err != nil {
+		http.Error(w, `{"error":"invalid supplier ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req UpdateSupplierStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.adminService.UpdateSupplierStatus(r.Context(), uint16(id), req.Active); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}

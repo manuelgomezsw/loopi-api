@@ -26,6 +26,13 @@ type Item struct {
 	Name               string             `json:"name"`
 	Active             bool               `json:"active"`
 	InventoryFrequency InventoryFrequency `json:"inventory_frequency"`
+	CategoryID         uint16             `json:"category_id"`
+	SupplierID         *uint16            `json:"supplier_id,omitempty"`
+	Cost               uint32             `json:"cost"` // COP without decimals
 	CreatedAt          time.Time          `json:"created_at"`
 	UpdatedAt          time.Time          `json:"updated_at"`
+
+	// Related entities (for joins)
+	Category *Category `json:"category,omitempty"`
+	Supplier *Supplier `json:"supplier,omitempty"`
 }

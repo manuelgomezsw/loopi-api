@@ -16,6 +16,8 @@ type AdminService struct {
 	inventoryDetailRepo repository.InventoryDetailRepository
 	employeeRepo        repository.EmployeeRepository
 	itemRepo            repository.ItemRepository
+	categoryRepo        repository.CategoryRepository
+	supplierRepo        repository.SupplierRepository
 }
 
 // NewAdminService creates a new admin service.
@@ -24,12 +26,16 @@ func NewAdminService(
 	inventoryDetailRepo repository.InventoryDetailRepository,
 	employeeRepo repository.EmployeeRepository,
 	itemRepo repository.ItemRepository,
+	categoryRepo repository.CategoryRepository,
+	supplierRepo repository.SupplierRepository,
 ) *AdminService {
 	return &AdminService{
 		inventoryRepo:       inventoryRepo,
 		inventoryDetailRepo: inventoryDetailRepo,
 		employeeRepo:        employeeRepo,
 		itemRepo:            itemRepo,
+		categoryRepo:        categoryRepo,
+		supplierRepo:        supplierRepo,
 	}
 }
 
@@ -312,6 +318,9 @@ type CreateItemRequest struct {
 	Type               entity.ItemType           `json:"type"`
 	Name               string                    `json:"name"`
 	InventoryFrequency entity.InventoryFrequency `json:"inventory_frequency"`
+	CategoryID         uint16                    `json:"category_id"`
+	SupplierID         *uint16                   `json:"supplier_id"`
+	Cost               uint32                    `json:"cost"`
 }
 
 // UpdateItemRequest contains data for updating an item.
@@ -320,6 +329,9 @@ type UpdateItemRequest struct {
 	Name               string                    `json:"name"`
 	InventoryFrequency entity.InventoryFrequency `json:"inventory_frequency"`
 	Active             bool                      `json:"active"`
+	CategoryID         uint16                    `json:"category_id"`
+	SupplierID         *uint16                   `json:"supplier_id"`
+	Cost               uint32                    `json:"cost"`
 }
 
 // ListItems retrieves items with filters and pagination.
@@ -375,12 +387,18 @@ func (s *AdminService) CreateItem(ctx context.Context, req CreateItemRequest) (*
 		req.InventoryFrequency != entity.InventoryFrequencyMonthly {
 		return nil, fmt.Errorf("invalid inventory frequency")
 	}
+	if req.CategoryID == 0 {
+		return nil, fmt.Errorf("category is required")
+	}
 
 	item := &entity.Item{
 		Type:               req.Type,
 		Name:               req.Name,
 		Active:             true,
 		InventoryFrequency: req.InventoryFrequency,
+		CategoryID:         req.CategoryID,
+		SupplierID:         req.SupplierID,
+		Cost:               req.Cost,
 		CreatedAt:          time.Now(),
 		UpdatedAt:          time.Now(),
 	}
@@ -413,11 +431,17 @@ func (s *AdminService) UpdateItem(ctx context.Context, id uint16, req UpdateItem
 		req.InventoryFrequency != entity.InventoryFrequencyMonthly {
 		return nil, fmt.Errorf("invalid inventory frequency")
 	}
+	if req.CategoryID == 0 {
+		return nil, fmt.Errorf("category is required")
+	}
 
 	item.Type = req.Type
 	item.Name = req.Name
 	item.InventoryFrequency = req.InventoryFrequency
 	item.Active = req.Active
+	item.CategoryID = req.CategoryID
+	item.SupplierID = req.SupplierID
+	item.Cost = req.Cost
 	item.UpdatedAt = time.Now()
 
 	if err := s.itemRepo.Update(ctx, item); err != nil {
@@ -686,4 +710,329 @@ func hashPassword(password string) (string, error) {
 		return "", err
 	}
 	return string(bytes), nil
+}
+
+// --- Category Management ---
+
+// CreateCategoryRequest contains data for creating a category.
+type CreateCategoryRequest struct {
+	Name string `json:"name"`
+}
+
+// UpdateCategoryRequest contains data for updating a category.
+type UpdateCategoryRequest struct {
+	Name   string `json:"name"`
+	Active bool   `json:"active"`
+}
+
+// ReorderCategoryRequest contains data for reordering categories.
+type ReorderCategoryRequest struct {
+	Orders []CategoryOrderItem `json:"orders"`
+}
+
+// CategoryOrderItem represents a single category order update.
+type CategoryOrderItem struct {
+	ID           uint16 `json:"id"`
+	DisplayOrder int    `json:"display_order"`
+}
+
+// ListCategories retrieves all categories.
+func (s *AdminService) ListCategories(ctx context.Context) ([]*entity.Category, error) {
+	categories, err := s.categoryRepo.FindAll(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list categories: %w", err)
+	}
+	return categories, nil
+}
+
+// GetCategory retrieves a single category by ID.
+func (s *AdminService) GetCategory(ctx context.Context, id uint16) (*entity.Category, error) {
+	category, err := s.categoryRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get category: %w", err)
+	}
+	if category == nil {
+		return nil, fmt.Errorf("category not found")
+	}
+	return category, nil
+}
+
+// CreateCategory creates a new category.
+func (s *AdminService) CreateCategory(ctx context.Context, req CreateCategoryRequest) (*entity.Category, error) {
+	if req.Name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+
+	// Check if name already exists
+	existing, err := s.categoryRepo.FindByName(ctx, req.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check category name: %w", err)
+	}
+	if existing != nil {
+		return nil, fmt.Errorf("category name already exists")
+	}
+
+	// Get next display order
+	maxOrder, err := s.categoryRepo.GetMaxDisplayOrder(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get max display order: %w", err)
+	}
+
+	category := &entity.Category{
+		Name:         req.Name,
+		DisplayOrder: maxOrder + 1,
+		Active:       true,
+	}
+
+	if err := s.categoryRepo.Create(ctx, category); err != nil {
+		return nil, fmt.Errorf("failed to create category: %w", err)
+	}
+
+	return category, nil
+}
+
+// UpdateCategory updates an existing category.
+func (s *AdminService) UpdateCategory(ctx context.Context, id uint16, req UpdateCategoryRequest) (*entity.Category, error) {
+	category, err := s.categoryRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get category: %w", err)
+	}
+	if category == nil {
+		return nil, fmt.Errorf("category not found")
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+
+	// Check if name already exists for another category
+	existing, err := s.categoryRepo.FindByName(ctx, req.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check category name: %w", err)
+	}
+	if existing != nil && existing.ID != id {
+		return nil, fmt.Errorf("category name already exists")
+	}
+
+	category.Name = req.Name
+	category.Active = req.Active
+
+	if err := s.categoryRepo.Update(ctx, category); err != nil {
+		return nil, fmt.Errorf("failed to update category: %w", err)
+	}
+
+	return category, nil
+}
+
+// UpdateCategoryStatus updates the active status of a category.
+func (s *AdminService) UpdateCategoryStatus(ctx context.Context, id uint16, active bool) error {
+	category, err := s.categoryRepo.FindByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get category: %w", err)
+	}
+	if category == nil {
+		return fmt.Errorf("category not found")
+	}
+
+	if err := s.categoryRepo.UpdateStatus(ctx, id, active); err != nil {
+		return fmt.Errorf("failed to update category status: %w", err)
+	}
+
+	return nil
+}
+
+// ReorderCategories updates the display order of multiple categories.
+func (s *AdminService) ReorderCategories(ctx context.Context, req ReorderCategoryRequest) error {
+	if len(req.Orders) == 0 {
+		return nil
+	}
+
+	orders := make(map[uint16]int)
+	for _, item := range req.Orders {
+		orders[item.ID] = item.DisplayOrder
+	}
+
+	if err := s.categoryRepo.UpdateDisplayOrders(ctx, orders); err != nil {
+		return fmt.Errorf("failed to reorder categories: %w", err)
+	}
+
+	return nil
+}
+
+// --- Supplier Management ---
+
+// SupplierFilter contains filters for listing suppliers.
+type SupplierFilter struct {
+	Active   *bool  `json:"active"`
+	Search   string `json:"search"`
+	Page     int    `json:"page"`
+	PageSize int    `json:"page_size"`
+}
+
+// SupplierListResult contains paginated supplier results.
+type SupplierListResult struct {
+	Suppliers  []*entity.Supplier `json:"suppliers"`
+	Total      int                `json:"total"`
+	Page       int                `json:"page"`
+	PageSize   int                `json:"page_size"`
+	TotalPages int                `json:"total_pages"`
+}
+
+// CreateSupplierRequest contains data for creating a supplier.
+type CreateSupplierRequest struct {
+	BusinessName string `json:"business_name"`
+	TaxID        string `json:"tax_id"`
+	ContactName  string `json:"contact_name"`
+	ContactPhone string `json:"contact_phone"`
+	ContactEmail string `json:"contact_email"`
+}
+
+// UpdateSupplierRequest contains data for updating a supplier.
+type UpdateSupplierRequest struct {
+	BusinessName string `json:"business_name"`
+	TaxID        string `json:"tax_id"`
+	ContactName  string `json:"contact_name"`
+	ContactPhone string `json:"contact_phone"`
+	ContactEmail string `json:"contact_email"`
+	Active       bool   `json:"active"`
+}
+
+// ListSuppliers retrieves suppliers with filters and pagination.
+func (s *AdminService) ListSuppliers(ctx context.Context, filter SupplierFilter) (*SupplierListResult, error) {
+	if filter.Page < 1 {
+		filter.Page = 1
+	}
+	if filter.PageSize < 1 || filter.PageSize > 100 {
+		filter.PageSize = 20
+	}
+
+	suppliers, total, err := s.supplierRepo.FindAllWithFilters(ctx, filter.Active, filter.Search, filter.Page, filter.PageSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list suppliers: %w", err)
+	}
+
+	totalPages := total / filter.PageSize
+	if total%filter.PageSize > 0 {
+		totalPages++
+	}
+
+	return &SupplierListResult{
+		Suppliers:  suppliers,
+		Total:      total,
+		Page:       filter.Page,
+		PageSize:   filter.PageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// ListAllActiveSuppliers retrieves all active suppliers for dropdowns.
+func (s *AdminService) ListAllActiveSuppliers(ctx context.Context) ([]*entity.Supplier, error) {
+	suppliers, err := s.supplierRepo.FindAllActive(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list active suppliers: %w", err)
+	}
+	return suppliers, nil
+}
+
+// GetSupplier retrieves a single supplier by ID.
+func (s *AdminService) GetSupplier(ctx context.Context, id uint16) (*entity.Supplier, error) {
+	supplier, err := s.supplierRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+	if supplier == nil {
+		return nil, fmt.Errorf("supplier not found")
+	}
+	return supplier, nil
+}
+
+// CreateSupplier creates a new supplier.
+func (s *AdminService) CreateSupplier(ctx context.Context, req CreateSupplierRequest) (*entity.Supplier, error) {
+	if req.BusinessName == "" {
+		return nil, fmt.Errorf("business_name is required")
+	}
+	if req.TaxID == "" {
+		return nil, fmt.Errorf("tax_id is required")
+	}
+
+	// Check if tax_id already exists
+	existing, err := s.supplierRepo.FindByTaxID(ctx, req.TaxID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check tax_id: %w", err)
+	}
+	if existing != nil {
+		return nil, fmt.Errorf("tax_id already exists")
+	}
+
+	supplier := &entity.Supplier{
+		BusinessName: req.BusinessName,
+		TaxID:        req.TaxID,
+		ContactName:  req.ContactName,
+		ContactPhone: req.ContactPhone,
+		ContactEmail: req.ContactEmail,
+		Active:       true,
+	}
+
+	if err := s.supplierRepo.Create(ctx, supplier); err != nil {
+		return nil, fmt.Errorf("failed to create supplier: %w", err)
+	}
+
+	return supplier, nil
+}
+
+// UpdateSupplier updates an existing supplier.
+func (s *AdminService) UpdateSupplier(ctx context.Context, id uint16, req UpdateSupplierRequest) (*entity.Supplier, error) {
+	supplier, err := s.supplierRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+	if supplier == nil {
+		return nil, fmt.Errorf("supplier not found")
+	}
+
+	if req.BusinessName == "" {
+		return nil, fmt.Errorf("business_name is required")
+	}
+	if req.TaxID == "" {
+		return nil, fmt.Errorf("tax_id is required")
+	}
+
+	// Check if tax_id already exists for another supplier
+	existing, err := s.supplierRepo.FindByTaxID(ctx, req.TaxID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check tax_id: %w", err)
+	}
+	if existing != nil && existing.ID != id {
+		return nil, fmt.Errorf("tax_id already exists")
+	}
+
+	supplier.BusinessName = req.BusinessName
+	supplier.TaxID = req.TaxID
+	supplier.ContactName = req.ContactName
+	supplier.ContactPhone = req.ContactPhone
+	supplier.ContactEmail = req.ContactEmail
+	supplier.Active = req.Active
+
+	if err := s.supplierRepo.Update(ctx, supplier); err != nil {
+		return nil, fmt.Errorf("failed to update supplier: %w", err)
+	}
+
+	return supplier, nil
+}
+
+// UpdateSupplierStatus updates the active status of a supplier.
+func (s *AdminService) UpdateSupplierStatus(ctx context.Context, id uint16, active bool) error {
+	supplier, err := s.supplierRepo.FindByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get supplier: %w", err)
+	}
+	if supplier == nil {
+		return fmt.Errorf("supplier not found")
+	}
+
+	if err := s.supplierRepo.UpdateStatus(ctx, id, active); err != nil {
+		return fmt.Errorf("failed to update supplier status: %w", err)
+	}
+
+	return nil
 }
