@@ -33,7 +33,7 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 			"https://loopi-c048d.web.app",
 			"https://loopi-c048d.firebaseapp.com",
 		},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
@@ -49,6 +49,8 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 	inventoryRepo := repository.NewMySQLInventoryRepository(db)
 	inventoryDetailRepo := repository.NewMySQLInventoryDetailRepository(db)
 	inventoryIssueRepo := repository.NewMySQLInventoryIssueRepository(db)
+	categoryRepo := repository.NewMySQLCategoryRepository(db)
+	supplierRepo := repository.NewMySQLSupplierRepository(db)
 
 	// Initialize services
 	authService := service.NewAuthService(employeeRepo, jwtManager)
@@ -63,6 +65,8 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 		inventoryDetailRepo,
 		employeeRepo,
 		itemRepo,
+		categoryRepo,
+		supplierRepo,
 	)
 
 	// Initialize handlers
@@ -141,6 +145,26 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 					r.Put("/{employeeID}", adminHandler.UpdateEmployee)
 					r.Patch("/{employeeID}/status", adminHandler.UpdateEmployeeStatus)
 					r.Post("/{employeeID}/reset-password", adminHandler.ResetEmployeePassword)
+				})
+
+				// Admin categories management
+				r.Route("/categories", func(r chi.Router) {
+					r.Get("/", adminHandler.ListCategories)
+					r.Post("/", adminHandler.CreateCategory)
+					r.Post("/reorder", adminHandler.ReorderCategories)
+					r.Get("/{categoryID}", adminHandler.GetCategory)
+					r.Put("/{categoryID}", adminHandler.UpdateCategory)
+					r.Patch("/{categoryID}/status", adminHandler.UpdateCategoryStatus)
+				})
+
+				// Admin suppliers management
+				r.Route("/suppliers", func(r chi.Router) {
+					r.Get("/", adminHandler.ListSuppliers)
+					r.Get("/active", adminHandler.ListAllActiveSuppliers)
+					r.Post("/", adminHandler.CreateSupplier)
+					r.Get("/{supplierID}", adminHandler.GetSupplier)
+					r.Put("/{supplierID}", adminHandler.UpdateSupplier)
+					r.Patch("/{supplierID}/status", adminHandler.UpdateSupplierStatus)
 				})
 			})
 		})
