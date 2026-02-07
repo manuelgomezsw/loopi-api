@@ -79,18 +79,21 @@ func (r *mysqlInventoryDetailRepository) FindByInventoryID(ctx context.Context, 
 }
 
 // FindByInventoryIDWithItems retrieves all details with item information.
+// Items are ordered by category display_order then by item name.
 func (r *mysqlInventoryDetailRepository) FindByInventoryIDWithItems(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error) {
 	query := `
 		SELECT 
 			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.created_at, d.updated_at,
-			i.id, i.type, i.name, i.active, i.inventory_frequency, i.created_at, i.updated_at
+			i.id, i.type, i.name, i.active, i.inventory_frequency, i.category_id, i.supplier_id, i.cost, i.created_at, i.updated_at,
+			c.name as category_name, c.display_order
 		FROM inventory_details d
 		INNER JOIN items i ON d.item_id = i.id
+		LEFT JOIN categories c ON i.category_id = c.id
 		WHERE d.inventory_id = ?
-		ORDER BY i.name
+		ORDER BY c.display_order ASC, i.name ASC
 	`
 
-	return r.queryDetailsWithItems(ctx, query, inventoryID)
+	return r.queryDetailsWithItemsAndCategory(ctx, query, inventoryID)
 }
 
 // FindDiscrepancies retrieves details where real_value differs from suggested_value.
@@ -98,16 +101,18 @@ func (r *mysqlInventoryDetailRepository) FindDiscrepancies(ctx context.Context, 
 	query := `
 		SELECT 
 			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.created_at, d.updated_at,
-			i.id, i.type, i.name, i.active, i.inventory_frequency, i.created_at, i.updated_at
+			i.id, i.type, i.name, i.active, i.inventory_frequency, i.category_id, i.supplier_id, i.cost, i.created_at, i.updated_at,
+			c.name as category_name, c.display_order
 		FROM inventory_details d
 		INNER JOIN items i ON d.item_id = i.id
+		LEFT JOIN categories c ON i.category_id = c.id
 		WHERE d.inventory_id = ?
 			AND d.real_value IS NOT NULL
 			AND (d.suggested_value IS NULL OR d.real_value != d.suggested_value)
-		ORDER BY i.name
+		ORDER BY c.display_order ASC, i.name ASC
 	`
 
-	return r.queryDetailsWithItems(ctx, query, inventoryID)
+	return r.queryDetailsWithItemsAndCategory(ctx, query, inventoryID)
 }
 
 // queryDetailsWithItems is a helper to query details joined with items.
@@ -146,6 +151,72 @@ func (r *mysqlInventoryDetailRepository) queryDetailsWithItems(ctx context.Conte
 		if unitsSold.Valid {
 			v := uint16(unitsSold.Int32)
 			d.UnitsSold = &v
+		}
+
+		d.Item = &item
+		details = append(details, &d)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating inventory details: %w", err)
+	}
+
+	return details, nil
+}
+
+// queryDetailsWithItemsAndCategory is a helper to query details joined with items and categories.
+func (r *mysqlInventoryDetailRepository) queryDetailsWithItemsAndCategory(ctx context.Context, query string, args ...interface{}) ([]*entity.InventoryDetail, error) {
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query inventory details with items and category: %w", err)
+	}
+	defer rows.Close()
+
+	var details []*entity.InventoryDetail
+	for rows.Next() {
+		var d entity.InventoryDetail
+		var item entity.Item
+		var suggestedValue, realValue, stockReceived, unitsSold sql.NullInt32
+		var supplierID sql.NullInt32
+		var categoryName sql.NullString
+		var displayOrder sql.NullInt32
+
+		if err := rows.Scan(
+			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &d.CreatedAt, &d.UpdatedAt,
+			&item.ID, &item.Type, &item.Name, &item.Active, &item.InventoryFrequency, &item.CategoryID, &supplierID, &item.Cost, &item.CreatedAt, &item.UpdatedAt,
+			&categoryName, &displayOrder,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan inventory detail with item and category: %w", err)
+		}
+
+		if suggestedValue.Valid {
+			v := uint16(suggestedValue.Int32)
+			d.SuggestedValue = &v
+		}
+		if realValue.Valid {
+			v := uint16(realValue.Int32)
+			d.RealValue = &v
+		}
+		if stockReceived.Valid {
+			v := uint16(stockReceived.Int32)
+			d.StockReceived = &v
+		}
+		if unitsSold.Valid {
+			v := uint16(unitsSold.Int32)
+			d.UnitsSold = &v
+		}
+		if supplierID.Valid {
+			v := uint16(supplierID.Int32)
+			item.SupplierID = &v
+		}
+
+		// Populate category info
+		if categoryName.Valid {
+			item.Category = &entity.Category{
+				ID:           item.CategoryID,
+				Name:         categoryName.String,
+				DisplayOrder: int(displayOrder.Int32),
+			}
 		}
 
 		d.Item = &item

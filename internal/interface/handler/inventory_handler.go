@@ -200,6 +200,9 @@ func (h *InventoryHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 		}
 		if d.Item != nil {
 			item.Name = d.Item.Name
+			if d.Item.Category != nil {
+				item.CategoryName = d.Item.Category.Name
+			}
 		}
 		if d.IsComplete() {
 			completedCount++

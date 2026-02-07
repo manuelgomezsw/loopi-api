@@ -25,6 +25,7 @@ type InventoryResponse struct {
 type InventoryItemResponse struct {
 	ItemID         uint16  `json:"item_id"`
 	Name           string  `json:"name"`
+	CategoryName   string  `json:"category_name,omitempty"`
 	SuggestedValue *uint16 `json:"suggested_value,omitempty"`
 	RealValue      *uint16 `json:"real_value,omitempty"`
 	StockReceived  *uint16 `json:"stock_received,omitempty"`
