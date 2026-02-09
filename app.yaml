@@ -16,6 +16,7 @@ env_variables:
   DB_NAME: "loopi"
   JWT_SECRET: "y4mmCP+GXmkNogRwxzqBKuNO72j29fkr4T65wzCN5Ug="
   JWT_EXPIRATION_HOURS: "24"
+  TZ: "America/Bogota"
 
 handlers:
   - url: /.*
