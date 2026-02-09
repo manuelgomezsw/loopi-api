@@ -316,12 +316,13 @@ type ItemListResult struct {
 
 // CreateItemRequest contains data for creating an item.
 type CreateItemRequest struct {
-	Type               entity.ItemType           `json:"type"`
-	Name               string                    `json:"name"`
-	InventoryFrequency entity.InventoryFrequency `json:"inventory_frequency"`
-	CategoryID         uint16                    `json:"category_id"`
-	SupplierID         *uint16                   `json:"supplier_id"`
-	Cost               uint32                    `json:"cost"`
+	Type                     entity.ItemType           `json:"type"`
+	Name                     string                    `json:"name"`
+	InventoryFrequency       entity.InventoryFrequency `json:"inventory_frequency"`
+	CategoryID               uint16                    `json:"category_id"`
+	SupplierID               *uint16                   `json:"supplier_id"`
+	Cost                     uint32                    `json:"cost"`
+	AddToActiveInventories   bool                      `json:"add_to_active_inventories"`
 }
 
 // UpdateItemRequest contains data for updating an item.
@@ -375,7 +376,7 @@ func (s *AdminService) GetItem(ctx context.Context, id uint16) (*entity.Item, er
 	return item, nil
 }
 
-// CreateItem creates a new item.
+// CreateItem creates a new item and optionally adds it to all active inventories.
 func (s *AdminService) CreateItem(ctx context.Context, req CreateItemRequest) (*entity.Item, error) {
 	if req.Name == "" {
 		return nil, fmt.Errorf("name is required")
@@ -408,7 +409,67 @@ func (s *AdminService) CreateItem(ctx context.Context, req CreateItemRequest) (*
 		return nil, fmt.Errorf("failed to create item: %w", err)
 	}
 
+	// Add item to all active inventories if requested
+	if req.AddToActiveInventories {
+		if err := s.addItemToActiveInventories(ctx, item); err != nil {
+			// Log the error but don't fail the item creation
+			fmt.Printf("warning: failed to add item to active inventories: %v\n", err)
+		}
+	}
+
 	return item, nil
+}
+
+// addItemToActiveInventories adds an item to all in-progress inventories
+// that match the item's inventory frequency.
+func (s *AdminService) addItemToActiveInventories(ctx context.Context, item *entity.Item) error {
+	inventories, err := s.inventoryRepo.FindAllInProgress(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to find active inventories: %w", err)
+	}
+
+	for _, inv := range inventories {
+		// Check if the item should be included based on inventory type and frequency
+		if !shouldIncludeItem(inv.InventoryType, item.InventoryFrequency) {
+			continue
+		}
+
+		detail := &entity.InventoryDetail{
+			InventoryID: inv.ID,
+			ItemID:      item.ID,
+		}
+
+		if err := s.inventoryDetailRepo.Create(ctx, detail); err != nil {
+			return fmt.Errorf("failed to add item %d to inventory %d: %w", item.ID, inv.ID, err)
+		}
+	}
+
+	return nil
+}
+
+// shouldIncludeItem checks if an item should be included in an inventory
+// based on the inventory type and item frequency.
+func shouldIncludeItem(inventoryType entity.InventoryType, itemFrequency entity.InventoryFrequency) bool {
+	switch inventoryType {
+	case entity.InventoryTypeDaily:
+		return itemFrequency == entity.InventoryFrequencyDaily
+	case entity.InventoryTypeWeekly:
+		return itemFrequency == entity.InventoryFrequencyDaily || itemFrequency == entity.InventoryFrequencyWeekly
+	case entity.InventoryTypeMonthly:
+		// Monthly inventories include all items
+		return true
+	default:
+		return false
+	}
+}
+
+// GetActiveInventoriesCount returns the count of in-progress inventories.
+func (s *AdminService) GetActiveInventoriesCount(ctx context.Context) (int, error) {
+	count, err := s.inventoryRepo.CountInProgress(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count active inventories: %w", err)
+	}
+	return count, nil
 }
 
 // UpdateItem updates an existing item.

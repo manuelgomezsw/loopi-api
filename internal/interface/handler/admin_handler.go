@@ -221,12 +221,13 @@ func (h *AdminHandler) GetItem(w http.ResponseWriter, r *http.Request) {
 
 // CreateItemRequest is the request body for creating an item.
 type CreateItemRequest struct {
-	Type               string  `json:"type"`
-	Name               string  `json:"name"`
-	InventoryFrequency string  `json:"inventory_frequency"`
-	CategoryID         uint16  `json:"category_id"`
-	SupplierID         *uint16 `json:"supplier_id"`
-	Cost               uint32  `json:"cost"`
+	Type                   string  `json:"type"`
+	Name                   string  `json:"name"`
+	InventoryFrequency     string  `json:"inventory_frequency"`
+	CategoryID             uint16  `json:"category_id"`
+	SupplierID             *uint16 `json:"supplier_id"`
+	Cost                   uint32  `json:"cost"`
+	AddToActiveInventories bool    `json:"add_to_active_inventories"`
 }
 
 // CreateItem creates a new item.
@@ -238,12 +239,13 @@ func (h *AdminHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	serviceReq := service.CreateItemRequest{
-		Type:               entity.ItemType(req.Type),
-		Name:               req.Name,
-		InventoryFrequency: entity.InventoryFrequency(req.InventoryFrequency),
-		CategoryID:         req.CategoryID,
-		SupplierID:         req.SupplierID,
-		Cost:               req.Cost,
+		Type:                   entity.ItemType(req.Type),
+		Name:                   req.Name,
+		InventoryFrequency:     entity.InventoryFrequency(req.InventoryFrequency),
+		CategoryID:             req.CategoryID,
+		SupplierID:             req.SupplierID,
+		Cost:                   req.Cost,
+		AddToActiveInventories: req.AddToActiveInventories,
 	}
 
 	item, err := h.adminService.CreateItem(r.Context(), serviceReq)
@@ -330,6 +332,17 @@ func (h *AdminHandler) UpdateItemStatus(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"success":true}`))
+}
+
+// GetActiveInventoriesCount returns the count of in-progress inventories.
+func (h *AdminHandler) GetActiveInventoriesCount(w http.ResponseWriter, r *http.Request) {
+	count, err := h.adminService.GetActiveInventoriesCount(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to get active inventories count")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]int{"count": count})
 }
 
 // --- Employee Handlers ---

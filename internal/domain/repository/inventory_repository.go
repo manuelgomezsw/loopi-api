@@ -44,6 +44,12 @@ type InventoryRepository interface {
 	// GetDashboardStats retrieves statistics for the admin dashboard.
 	GetDashboardStats(ctx context.Context) (*DashboardStats, error)
 
+	// FindAllInProgress retrieves all in-progress inventories.
+	FindAllInProgress(ctx context.Context) ([]*entity.Inventory, error)
+
+	// CountInProgress returns the count of in-progress inventories.
+	CountInProgress(ctx context.Context) (int, error)
+
 	// Create creates a new inventory.
 	Create(ctx context.Context, inventory *entity.Inventory) error
 

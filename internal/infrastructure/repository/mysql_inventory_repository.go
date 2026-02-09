@@ -514,3 +514,65 @@ func (r *mysqlInventoryRepository) FindAllWithFilters(ctx context.Context, dateF
 
 	return inventories, total, nil
 }
+
+// FindAllInProgress retrieves all in-progress inventories.
+func (r *mysqlInventoryRepository) FindAllInProgress(ctx context.Context) ([]*entity.Inventory, error) {
+	query := `
+		SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
+		FROM inventories
+		WHERE status = 'in_progress'
+		ORDER BY started_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find in-progress inventories: %w", err)
+	}
+	defer rows.Close()
+
+	var inventories []*entity.Inventory
+	for rows.Next() {
+		var inv entity.Inventory
+		var completedAt sql.NullTime
+		var schedule sql.NullString
+
+		err := rows.Scan(
+			&inv.ID,
+			&inv.InventoryDate,
+			&inv.InventoryType,
+			&schedule,
+			&inv.Status,
+			&inv.ResponsibleID,
+			&inv.StartedAt,
+			&completedAt,
+			&inv.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan inventory: %w", err)
+		}
+
+		if completedAt.Valid {
+			inv.CompletedAt = &completedAt.Time
+		}
+		if schedule.Valid {
+			s := entity.Schedule(schedule.String)
+			inv.Schedule = &s
+		}
+		inventories = append(inventories, &inv)
+	}
+
+	return inventories, nil
+}
+
+// CountInProgress returns the count of in-progress inventories.
+func (r *mysqlInventoryRepository) CountInProgress(ctx context.Context) (int, error) {
+	query := `SELECT COUNT(*) FROM inventories WHERE status = 'in_progress'`
+
+	var count int
+	err := r.db.QueryRowContext(ctx, query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count in-progress inventories: %w", err)
+	}
+
+	return count, nil
+}

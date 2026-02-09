@@ -121,12 +121,13 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 				// Dashboard
 				r.Get("/dashboard", adminHandler.GetDashboard)
 
-				// Admin inventories management
-				r.Route("/inventories", func(r chi.Router) {
-					r.Get("/", adminHandler.ListInventories)
-					r.Get("/{inventoryID}", adminHandler.GetInventoryDetail)
-					r.Put("/{inventoryID}/details/{detailID}", adminHandler.UpdateInventoryDetail)
-				})
+			// Admin inventories management
+			r.Route("/inventories", func(r chi.Router) {
+				r.Get("/", adminHandler.ListInventories)
+				r.Get("/active-count", adminHandler.GetActiveInventoriesCount)
+				r.Get("/{inventoryID}", adminHandler.GetInventoryDetail)
+				r.Put("/{inventoryID}/details/{detailID}", adminHandler.UpdateInventoryDetail)
+			})
 
 				// Admin items management
 				r.Route("/items", func(r chi.Router) {
