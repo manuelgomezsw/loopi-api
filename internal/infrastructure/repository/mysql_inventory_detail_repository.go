@@ -7,6 +7,7 @@ import (
 
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
+	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 )
 
 // mysqlInventoryDetailRepository implements repository.InventoryDetailRepository.
@@ -303,7 +304,7 @@ func (r *mysqlInventoryDetailRepository) Create(ctx context.Context, detail *ent
 func (r *mysqlInventoryDetailRepository) Update(ctx context.Context, detail *entity.InventoryDetail) error {
 	query := `
 		UPDATE inventory_details
-		SET suggested_value = ?, real_value = ?, stock_received = ?, units_sold = ?, updated_at = NOW()
+		SET suggested_value = ?, real_value = ?, stock_received = ?, units_sold = ?, updated_at = ?
 		WHERE id = ?
 	`
 
@@ -312,6 +313,7 @@ func (r *mysqlInventoryDetailRepository) Update(ctx context.Context, detail *ent
 		detail.RealValue,
 		detail.StockReceived,
 		detail.UnitsSold,
+		datetime.Now(),
 		detail.ID,
 	)
 	if err != nil {
@@ -323,15 +325,16 @@ func (r *mysqlInventoryDetailRepository) Update(ctx context.Context, detail *ent
 
 // Upsert creates or updates an inventory detail.
 func (r *mysqlInventoryDetailRepository) Upsert(ctx context.Context, detail *entity.InventoryDetail) error {
+	now := datetime.Now()
 	query := `
-		INSERT INTO inventory_details (inventory_id, item_id, suggested_value, real_value, stock_received, units_sold)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO inventory_details (inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			suggested_value = VALUES(suggested_value),
 			real_value = VALUES(real_value),
 			stock_received = VALUES(stock_received),
 			units_sold = VALUES(units_sold),
-			updated_at = NOW()
+			updated_at = VALUES(updated_at)
 	`
 
 	result, err := r.db.ExecContext(ctx, query,
@@ -341,6 +344,8 @@ func (r *mysqlInventoryDetailRepository) Upsert(ctx context.Context, detail *ent
 		detail.RealValue,
 		detail.StockReceived,
 		detail.UnitsSold,
+		now,
+		now,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to upsert inventory detail: %w", err)

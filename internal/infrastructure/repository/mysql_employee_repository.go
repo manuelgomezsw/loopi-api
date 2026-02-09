@@ -7,6 +7,7 @@ import (
 
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
+	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 )
 
 // mysqlEmployeeRepository implements repository.EmployeeRepository.
@@ -183,7 +184,7 @@ func (r *mysqlEmployeeRepository) Update(ctx context.Context, employee *entity.E
 	query := `
 		UPDATE employees
 		SET username = ?, name = ?, last_name = ?, document_type = ?, document_number = ?,
-		    phone = ?, email = ?, birth_date = ?, role = ?, active = ?, updated_at = NOW()
+		    phone = ?, email = ?, birth_date = ?, role = ?, active = ?, updated_at = ?
 		WHERE id = ?
 	`
 
@@ -198,6 +199,7 @@ func (r *mysqlEmployeeRepository) Update(ctx context.Context, employee *entity.E
 		employee.BirthDate,
 		employee.Role,
 		employee.Active,
+		datetime.Now(),
 		employee.ID,
 	)
 	if err != nil {
@@ -209,9 +211,9 @@ func (r *mysqlEmployeeRepository) Update(ctx context.Context, employee *entity.E
 
 // UpdateStatus updates the active status of an employee.
 func (r *mysqlEmployeeRepository) UpdateStatus(ctx context.Context, id uint16, active bool) error {
-	query := `UPDATE employees SET active = ?, updated_at = NOW() WHERE id = ?`
+	query := `UPDATE employees SET active = ?, updated_at = ? WHERE id = ?`
 
-	_, err := r.db.ExecContext(ctx, query, active, id)
+	_, err := r.db.ExecContext(ctx, query, active, datetime.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update employee status: %w", err)
 	}
@@ -221,9 +223,9 @@ func (r *mysqlEmployeeRepository) UpdateStatus(ctx context.Context, id uint16, a
 
 // UpdatePassword updates the password hash of an employee.
 func (r *mysqlEmployeeRepository) UpdatePassword(ctx context.Context, id uint16, passwordHash string) error {
-	query := `UPDATE employees SET password_hash = ?, updated_at = NOW() WHERE id = ?`
+	query := `UPDATE employees SET password_hash = ?, updated_at = ? WHERE id = ?`
 
-	_, err := r.db.ExecContext(ctx, query, passwordHash, id)
+	_, err := r.db.ExecContext(ctx, query, passwordHash, datetime.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update employee password: %w", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/manuelgomezsw/loopi-api/internal/infrastructure/database"
 	"github.com/manuelgomezsw/loopi-api/internal/interface/router"
 	"github.com/manuelgomezsw/loopi-api/pkg/config"
+	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 )
 
 func main() {
@@ -16,8 +17,12 @@ func main() {
 		log.Fatalf("failed to load configuration: %v", err)
 	}
 
-	// Initialize database connection
-	db, err := database.NewMySQL(cfg.Database)
+	// Initialize datetime with configured timezone
+	datetime.SetTimezone(cfg.Timezone)
+	log.Printf("Timezone configured: %s", datetime.GetTimezone())
+
+	// Initialize database connection with timezone
+	db, err := database.NewMySQLWithTimezone(cfg.Database, cfg.Timezone)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}

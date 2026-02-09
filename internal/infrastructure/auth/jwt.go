@@ -7,6 +7,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/pkg/config"
+	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 )
 
 // Claims represents the JWT claims.
@@ -33,7 +34,7 @@ func NewJWTManager(cfg config.JWTConfig) *JWTManager {
 
 // GenerateToken generates a new JWT token for an employee.
 func (m *JWTManager) GenerateToken(employee *entity.Employee) (string, error) {
-	now := time.Now()
+	now := datetime.Now()
 	claims := Claims{
 		EmployeeID: employee.ID,
 		Username:   employee.Username,

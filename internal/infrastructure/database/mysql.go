@@ -9,9 +9,14 @@ import (
 	"github.com/manuelgomezsw/loopi-api/pkg/config"
 )
 
-// NewMySQL creates a new MySQL database connection.
+// NewMySQL creates a new MySQL database connection using the default timezone.
 func NewMySQL(cfg config.DatabaseConfig) (*sql.DB, error) {
-	db, err := sql.Open("mysql", cfg.DSN())
+	return NewMySQLWithTimezone(cfg, config.DefaultTimezone)
+}
+
+// NewMySQLWithTimezone creates a new MySQL database connection with a specific timezone.
+func NewMySQLWithTimezone(cfg config.DatabaseConfig, timezone string) (*sql.DB, error) {
+	db, err := sql.Open("mysql", cfg.DSNWithTimezone(timezone))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database connection: %w", err)
 	}

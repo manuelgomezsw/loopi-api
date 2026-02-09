@@ -7,6 +7,7 @@ import (
 
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
+	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 	apperrors "github.com/manuelgomezsw/loopi-api/pkg/errors"
 )
 
@@ -42,7 +43,7 @@ type SuggestedInventory struct {
 
 // GetSuggestedSchedule returns the suggested schedule based on current time.
 func (s *InventoryService) GetSuggestedSchedule() SuggestedInventory {
-	now := time.Now()
+	now := datetime.Now()
 	hour := now.Hour()
 
 	var schedule entity.Schedule
@@ -114,7 +115,7 @@ func (s *InventoryService) CreateInventory(ctx context.Context, inventoryType en
 		Schedule:      schedule,
 		Status:        entity.InventoryStatusInProgress,
 		ResponsibleID: responsibleID,
-		StartedAt:     time.Now(),
+		StartedAt:     datetime.Now(),
 	}
 
 	if err := s.inventoryRepo.Create(ctx, inventory); err != nil {

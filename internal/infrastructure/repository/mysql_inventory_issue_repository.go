@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
+	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 )
 
 // mysqlInventoryIssueRepository implements repository.InventoryIssueRepository.
@@ -161,7 +161,7 @@ func (r *mysqlInventoryIssueRepository) Resolve(ctx context.Context, id uint32, 
 		WHERE id = ?
 	`
 
-	_, err := r.db.ExecContext(ctx, query, notes, resolvedBy, time.Now(), id)
+	_, err := r.db.ExecContext(ctx, query, notes, resolvedBy, datetime.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to resolve issue: %w", err)
 	}

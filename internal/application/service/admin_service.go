@@ -7,6 +7,7 @@ import (
 
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
+	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -399,8 +400,8 @@ func (s *AdminService) CreateItem(ctx context.Context, req CreateItemRequest) (*
 		CategoryID:         req.CategoryID,
 		SupplierID:         req.SupplierID,
 		Cost:               req.Cost,
-		CreatedAt:          time.Now(),
-		UpdatedAt:          time.Now(),
+		CreatedAt:          datetime.Now(),
+		UpdatedAt:          datetime.Now(),
 	}
 
 	if err := s.itemRepo.Create(ctx, item); err != nil {
@@ -442,7 +443,7 @@ func (s *AdminService) UpdateItem(ctx context.Context, id uint16, req UpdateItem
 	item.CategoryID = req.CategoryID
 	item.SupplierID = req.SupplierID
 	item.Cost = req.Cost
-	item.UpdatedAt = time.Now()
+	item.UpdatedAt = datetime.Now()
 
 	if err := s.itemRepo.Update(ctx, item); err != nil {
 		return nil, fmt.Errorf("failed to update item: %w", err)
@@ -601,8 +602,8 @@ func (s *AdminService) CreateEmployee(ctx context.Context, req CreateEmployeeReq
 		BirthDate:      req.BirthDate,
 		Role:           req.Role,
 		Active:         true,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		CreatedAt:      datetime.Now(),
+		UpdatedAt:      datetime.Now(),
 	}
 
 	if err := s.employeeRepo.Create(ctx, employee); err != nil {
@@ -645,7 +646,7 @@ func (s *AdminService) UpdateEmployee(ctx context.Context, id uint16, req Update
 	employee.BirthDate = req.BirthDate
 	employee.Role = req.Role
 	employee.Active = req.Active
-	employee.UpdatedAt = time.Now()
+	employee.UpdatedAt = datetime.Now()
 
 	if err := s.employeeRepo.Update(ctx, employee); err != nil {
 		return nil, fmt.Errorf("failed to update employee: %w", err)

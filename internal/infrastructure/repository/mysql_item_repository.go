@@ -7,6 +7,7 @@ import (
 
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
+	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 )
 
 // mysqlItemRepository implements repository.ItemRepository.
@@ -300,11 +301,11 @@ func (r *mysqlItemRepository) Update(ctx context.Context, item *entity.Item) err
 	query := `
 		UPDATE items
 		SET type = ?, name = ?, active = ?, inventory_frequency = ?, 
-		    category_id = ?, supplier_id = ?, cost = ?, updated_at = NOW()
+		    category_id = ?, supplier_id = ?, cost = ?, updated_at = ?
 		WHERE id = ?
 	`
 
-	_, err := r.db.ExecContext(ctx, query, item.Type, item.Name, item.Active, item.InventoryFrequency, item.CategoryID, item.SupplierID, item.Cost, item.ID)
+	_, err := r.db.ExecContext(ctx, query, item.Type, item.Name, item.Active, item.InventoryFrequency, item.CategoryID, item.SupplierID, item.Cost, datetime.Now(), item.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update item: %w", err)
 	}
@@ -316,11 +317,11 @@ func (r *mysqlItemRepository) Update(ctx context.Context, item *entity.Item) err
 func (r *mysqlItemRepository) UpdateStatus(ctx context.Context, id uint16, active bool) error {
 	query := `
 		UPDATE items
-		SET active = ?, updated_at = NOW()
+		SET active = ?, updated_at = ?
 		WHERE id = ?
 	`
 
-	_, err := r.db.ExecContext(ctx, query, active, id)
+	_, err := r.db.ExecContext(ctx, query, active, datetime.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update item status: %w", err)
 	}

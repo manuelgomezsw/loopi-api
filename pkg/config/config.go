@@ -2,17 +2,22 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 
 	"github.com/joho/godotenv"
 )
 
+// DefaultTimezone is the default timezone for the application (Colombia).
+const DefaultTimezone = "America/Bogota"
+
 // Config holds all configuration for the application.
 type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	JWT      JWTConfig
+	Timezone string
 }
 
 // ServerConfig holds server-related configuration.
@@ -63,20 +68,31 @@ func Load() (*Config, error) {
 			Secret:          getEnv("JWT_SECRET", "dev-secret-key-change-in-production"),
 			ExpirationHours: jwtExpHours,
 		},
+		Timezone: getEnv("TZ", DefaultTimezone),
 	}, nil
 }
 
 // DSN returns the database connection string.
 // Uses Unix socket if InstanceConnection is set (for App Engine), otherwise TCP.
+// The timezone is URL-encoded to handle the "/" character in timezone names.
 func (c *DatabaseConfig) DSN() string {
+	return c.DSNWithTimezone(DefaultTimezone)
+}
+
+// DSNWithTimezone returns the database connection string with a specific timezone.
+// The timezone is URL-encoded to handle the "/" character in timezone names.
+func (c *DatabaseConfig) DSNWithTimezone(timezone string) string {
+	// URL encode the timezone to handle "/" in timezone names like "America/Bogota"
+	encodedTZ := url.QueryEscape(timezone)
+
 	if c.InstanceConnection != "" {
 		// App Engine: use Unix socket
-		return fmt.Sprintf("%s:%s@unix(/cloudsql/%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-			c.User, c.Password, c.InstanceConnection, c.Name)
+		return fmt.Sprintf("%s:%s@unix(/cloudsql/%s)/%s?charset=utf8mb4&parseTime=True&loc=%s",
+			c.User, c.Password, c.InstanceConnection, c.Name, encodedTZ)
 	}
 	// Local development: use TCP
-	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		c.User, c.Password, c.Host, c.Port, c.Name)
+	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=%s",
+		c.User, c.Password, c.Host, c.Port, c.Name, encodedTZ)
 }
 
 // getEnv retrieves an environment variable or returns a default value.
