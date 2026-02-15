@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/manuelgomezsw/loopi-api/internal/application/dto/request"
 	"github.com/manuelgomezsw/loopi-api/internal/application/service"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 )
@@ -567,6 +568,46 @@ func (h *AdminHandler) ResetEmployeePassword(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"success":true}`))
+}
+
+// ListAllActiveEmployees returns all active employees for dropdowns.
+func (h *AdminHandler) ListAllActiveEmployees(w http.ResponseWriter, r *http.Request) {
+	employees, err := h.adminService.ListAllActiveEmployees(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to list active employees")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"employees": employees,
+		"total":     len(employees),
+	})
+}
+
+// --- Initial Inventory Handlers ---
+
+// CreateInitialInventory creates a new initial (baseline) inventory.
+func (h *AdminHandler) CreateInitialInventory(w http.ResponseWriter, r *http.Request) {
+	var req request.CreateInitialInventoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	inventory, err := h.adminService.CreateInitialInventory(r.Context(), req.ResponsibleID)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, map[string]interface{}{
+		"inventory": inventory,
+	})
 }
 
 // --- Category Handlers ---

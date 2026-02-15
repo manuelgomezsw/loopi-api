@@ -97,12 +97,26 @@ func isValidSchedule(s string) bool {
 	return validSchedules[s]
 }
 
+// CreateInitialInventoryRequest represents the request to create an initial (baseline) inventory.
+type CreateInitialInventoryRequest struct {
+	ResponsibleID uint16 `json:"responsible_id"`
+}
+
+// Validate validates the create initial inventory request.
+func (r *CreateInitialInventoryRequest) Validate() error {
+	if r.ResponsibleID == 0 {
+		return ErrResponsibleIDRequired
+	}
+	return nil
+}
+
 // isValidInventoryType checks if the inventory type value is valid.
 func isValidInventoryType(t string) bool {
 	validTypes := map[string]bool{
 		"daily":   true,
 		"weekly":  true,
 		"monthly": true,
+		"initial": true,
 	}
 	return validTypes[t]
 }

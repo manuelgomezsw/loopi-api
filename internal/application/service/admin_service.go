@@ -42,10 +42,10 @@ func NewAdminService(
 
 // DashboardStats contains dashboard statistics.
 type DashboardStats struct {
-	TodayInventories      int `json:"today_inventories"`
-	WithDiscrepancies     int `json:"with_discrepancies"`
-	WithoutDiscrepancies  int `json:"without_discrepancies"`
-	PendingInventories    int `json:"pending_inventories"`
+	TodayInventories     int `json:"today_inventories"`
+	WithDiscrepancies    int `json:"with_discrepancies"`
+	WithoutDiscrepancies int `json:"without_discrepancies"`
+	PendingInventories   int `json:"pending_inventories"`
 }
 
 // DiscrepancySummary contains a summary of a discrepancy for the dashboard.
@@ -62,8 +62,8 @@ type DiscrepancySummary struct {
 
 // DashboardData contains all dashboard data.
 type DashboardData struct {
-	Stats                 DashboardStats       `json:"stats"`
-	RecentDiscrepancies   []DiscrepancySummary `json:"recent_discrepancies"`
+	Stats               DashboardStats       `json:"stats"`
+	RecentDiscrepancies []DiscrepancySummary `json:"recent_discrepancies"`
 }
 
 // GetDashboard returns dashboard data.
@@ -88,7 +88,7 @@ func (s *AdminService) GetDashboard(ctx context.Context, days int) (*DashboardDa
 		if d.RealValue != nil {
 			actual = *d.RealValue
 		}
-		
+
 		recentDiscrepancies = append(recentDiscrepancies, DiscrepancySummary{
 			InventoryID:   d.InventoryID,
 			ItemID:        d.ItemID,
@@ -125,17 +125,17 @@ type InventoryFilter struct {
 
 // InventoryListItem represents an inventory in the list view.
 type InventoryListItem struct {
-	ID               uint32              `json:"id"`
-	InventoryDate    time.Time           `json:"inventory_date"`
-	InventoryType    entity.InventoryType `json:"inventory_type"`
-	Schedule         *entity.Schedule    `json:"schedule,omitempty"`
-	Status           entity.InventoryStatus `json:"status"`
-	EmployeeID       uint16              `json:"employee_id"`
-	EmployeeName     string              `json:"employee_name"`
-	TotalItems       int                 `json:"total_items"`
-	ItemsWithDiff    int                 `json:"items_with_diff"`
-	StartedAt        time.Time           `json:"started_at"`
-	CompletedAt      *time.Time          `json:"completed_at,omitempty"`
+	ID            uint32                 `json:"id"`
+	InventoryDate time.Time              `json:"inventory_date"`
+	InventoryType entity.InventoryType   `json:"inventory_type"`
+	Schedule      *entity.Schedule       `json:"schedule,omitempty"`
+	Status        entity.InventoryStatus `json:"status"`
+	EmployeeID    uint16                 `json:"employee_id"`
+	EmployeeName  string                 `json:"employee_name"`
+	TotalItems    int                    `json:"total_items"`
+	ItemsWithDiff int                    `json:"items_with_diff"`
+	StartedAt     time.Time              `json:"started_at"`
+	CompletedAt   *time.Time             `json:"completed_at,omitempty"`
 }
 
 // InventoryListResult contains the paginated list result.
@@ -191,32 +191,32 @@ func (s *AdminService) ListInventories(ctx context.Context, filter InventoryFilt
 
 // InventoryDetailView represents the detailed view of an inventory.
 type InventoryDetailView struct {
-	ID            uint32                `json:"id"`
-	InventoryDate time.Time             `json:"inventory_date"`
-	InventoryType entity.InventoryType  `json:"inventory_type"`
-	Schedule      *entity.Schedule      `json:"schedule,omitempty"`
+	ID            uint32                 `json:"id"`
+	InventoryDate time.Time              `json:"inventory_date"`
+	InventoryType entity.InventoryType   `json:"inventory_type"`
+	Schedule      *entity.Schedule       `json:"schedule,omitempty"`
 	Status        entity.InventoryStatus `json:"status"`
-	EmployeeID    uint16                `json:"employee_id"`
-	EmployeeName  string                `json:"employee_name"`
-	StartedAt     time.Time             `json:"started_at"`
-	CompletedAt   *time.Time            `json:"completed_at,omitempty"`
-	TotalItems    int                   `json:"total_items"`
-	ItemsWithDiff int                   `json:"items_with_diff"`
-	Details       []InventoryDetailItem `json:"details"`
+	EmployeeID    uint16                 `json:"employee_id"`
+	EmployeeName  string                 `json:"employee_name"`
+	StartedAt     time.Time              `json:"started_at"`
+	CompletedAt   *time.Time             `json:"completed_at,omitempty"`
+	TotalItems    int                    `json:"total_items"`
+	ItemsWithDiff int                    `json:"items_with_diff"`
+	Details       []InventoryDetailItem  `json:"details"`
 }
 
 // InventoryDetailItem represents a single item in the inventory detail.
 type InventoryDetailItem struct {
-	DetailID      uint32  `json:"detail_id"`
-	ItemID        uint16  `json:"item_id"`
-	ItemName      string  `json:"item_name"`
-	ItemType      string  `json:"item_type"`
+	DetailID       uint32  `json:"detail_id"`
+	ItemID         uint16  `json:"item_id"`
+	ItemName       string  `json:"item_name"`
+	ItemType       string  `json:"item_type"`
 	SuggestedValue *uint16 `json:"suggested_value"`
-	RealValue     *uint16 `json:"real_value"`
-	StockReceived *uint16 `json:"stock_received"`
-	UnitsSold     *uint16 `json:"units_sold"`
-	Difference    int16   `json:"difference"`
-	HasDiscrepancy bool   `json:"has_discrepancy"`
+	RealValue      *uint16 `json:"real_value"`
+	StockReceived  *uint16 `json:"stock_received"`
+	UnitsSold      *uint16 `json:"units_sold"`
+	Difference     int16   `json:"difference"`
+	HasDiscrepancy bool    `json:"has_discrepancy"`
 }
 
 // GetInventoryDetail returns detailed information about an inventory.
@@ -241,7 +241,7 @@ func (s *AdminService) GetInventoryDetail(ctx context.Context, inventoryID uint3
 		if hasDiscrepancy {
 			itemsWithDiff++
 		}
-		
+
 		detailItems = append(detailItems, InventoryDetailItem{
 			DetailID:       d.ID,
 			ItemID:         d.ItemID,
@@ -316,13 +316,13 @@ type ItemListResult struct {
 
 // CreateItemRequest contains data for creating an item.
 type CreateItemRequest struct {
-	Type                     entity.ItemType           `json:"type"`
-	Name                     string                    `json:"name"`
-	InventoryFrequency       entity.InventoryFrequency `json:"inventory_frequency"`
-	CategoryID               uint16                    `json:"category_id"`
-	SupplierID               *uint16                   `json:"supplier_id"`
-	Cost                     uint32                    `json:"cost"`
-	AddToActiveInventories   bool                      `json:"add_to_active_inventories"`
+	Type                   entity.ItemType           `json:"type"`
+	Name                   string                    `json:"name"`
+	InventoryFrequency     entity.InventoryFrequency `json:"inventory_frequency"`
+	CategoryID             uint16                    `json:"category_id"`
+	SupplierID             *uint16                   `json:"supplier_id"`
+	Cost                   uint32                    `json:"cost"`
+	AddToActiveInventories bool                      `json:"add_to_active_inventories"`
 }
 
 // UpdateItemRequest contains data for updating an item.
@@ -455,8 +455,8 @@ func shouldIncludeItem(inventoryType entity.InventoryType, itemFrequency entity.
 		return itemFrequency == entity.InventoryFrequencyDaily
 	case entity.InventoryTypeWeekly:
 		return itemFrequency == entity.InventoryFrequencyDaily || itemFrequency == entity.InventoryFrequencyWeekly
-	case entity.InventoryTypeMonthly:
-		// Monthly inventories include all items
+	case entity.InventoryTypeMonthly, entity.InventoryTypeInitial:
+		// Monthly and initial inventories include all items
 		return true
 	default:
 		return false
@@ -552,30 +552,30 @@ type EmployeeListResult struct {
 
 // CreateEmployeeRequest contains data for creating an employee.
 type CreateEmployeeRequest struct {
-	Username       string       `json:"username"`
-	Password       string       `json:"password"`
-	Name           string       `json:"name"`
-	LastName       string       `json:"last_name"`
-	DocumentType   *string      `json:"document_type"`
-	DocumentNumber *string      `json:"document_number"`
-	Phone          *string      `json:"phone"`
-	Email          *string      `json:"email"`
-	BirthDate      *time.Time   `json:"birth_date"`
-	Role           entity.Role  `json:"role"`
+	Username       string      `json:"username"`
+	Password       string      `json:"password"`
+	Name           string      `json:"name"`
+	LastName       string      `json:"last_name"`
+	DocumentType   *string     `json:"document_type"`
+	DocumentNumber *string     `json:"document_number"`
+	Phone          *string     `json:"phone"`
+	Email          *string     `json:"email"`
+	BirthDate      *time.Time  `json:"birth_date"`
+	Role           entity.Role `json:"role"`
 }
 
 // UpdateEmployeeRequest contains data for updating an employee.
 type UpdateEmployeeRequest struct {
-	Username       string       `json:"username"`
-	Name           string       `json:"name"`
-	LastName       string       `json:"last_name"`
-	DocumentType   *string      `json:"document_type"`
-	DocumentNumber *string      `json:"document_number"`
-	Phone          *string      `json:"phone"`
-	Email          *string      `json:"email"`
-	BirthDate      *time.Time   `json:"birth_date"`
-	Role           entity.Role  `json:"role"`
-	Active         bool         `json:"active"`
+	Username       string      `json:"username"`
+	Name           string      `json:"name"`
+	LastName       string      `json:"last_name"`
+	DocumentType   *string     `json:"document_type"`
+	DocumentNumber *string     `json:"document_number"`
+	Phone          *string     `json:"phone"`
+	Email          *string     `json:"email"`
+	BirthDate      *time.Time  `json:"birth_date"`
+	Role           entity.Role `json:"role"`
+	Active         bool        `json:"active"`
 }
 
 // ListEmployees retrieves employees with filters and pagination.
@@ -985,6 +985,86 @@ func (s *AdminService) ListSuppliers(ctx context.Context, filter SupplierFilter)
 		PageSize:   filter.PageSize,
 		TotalPages: totalPages,
 	}, nil
+}
+
+// ListAllActiveEmployees retrieves all active employees for dropdowns.
+func (s *AdminService) ListAllActiveEmployees(ctx context.Context) ([]*entity.Employee, error) {
+	employees, err := s.employeeRepo.FindAllActive(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list active employees: %w", err)
+	}
+	return employees, nil
+}
+
+// CreateInitialInventory creates an initial (baseline) inventory assigned to a specific employee.
+// Only one completed initial inventory can exist at a time.
+func (s *AdminService) CreateInitialInventory(ctx context.Context, responsibleID uint16) (*entity.Inventory, error) {
+	// Validate the employee exists and is active
+	employee, err := s.employeeRepo.FindByID(ctx, responsibleID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get employee: %w", err)
+	}
+	if employee == nil {
+		return nil, fmt.Errorf("employee not found")
+	}
+	if !employee.Active {
+		return nil, fmt.Errorf("employee is not active")
+	}
+
+	// Check if an initial inventory already exists (in_progress or completed)
+	existing, err := s.inventoryRepo.FindLatestByType(ctx, entity.InventoryTypeInitial)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing initial inventory: %w", err)
+	}
+	if existing != nil {
+		return nil, fmt.Errorf("an initial inventory already exists")
+	}
+
+	// Also check for in-progress initial inventories
+	inProgress, err := s.inventoryRepo.FindAllInProgress(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check in-progress inventories: %w", err)
+	}
+	for _, inv := range inProgress {
+		if inv.IsInitial() {
+			return nil, fmt.Errorf("an initial inventory is already in progress")
+		}
+	}
+
+	// Create the initial inventory
+	now := datetime.Now()
+	inventory := &entity.Inventory{
+		InventoryDate: now,
+		InventoryType: entity.InventoryTypeInitial,
+		Schedule:      nil,
+		Status:        entity.InventoryStatusInProgress,
+		ResponsibleID: responsibleID,
+		StartedAt:     now,
+	}
+
+	if err := s.inventoryRepo.Create(ctx, inventory); err != nil {
+		return nil, fmt.Errorf("failed to create initial inventory: %w", err)
+	}
+
+	// Pre-populate with ALL active items (no suggested values)
+	items, err := s.itemRepo.FindActiveByInventoryType(ctx, entity.InventoryTypeInitial)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get items: %w", err)
+	}
+
+	details := make([]*entity.InventoryDetail, 0, len(items))
+	for _, item := range items {
+		details = append(details, &entity.InventoryDetail{
+			InventoryID: inventory.ID,
+			ItemID:      item.ID,
+		})
+	}
+
+	if err := s.inventoryDetailRepo.CreateBatch(ctx, details); err != nil {
+		return nil, fmt.Errorf("failed to create inventory details: %w", err)
+	}
+
+	return inventory, nil
 }
 
 // ListAllActiveSuppliers retrieves all active suppliers for dropdowns.

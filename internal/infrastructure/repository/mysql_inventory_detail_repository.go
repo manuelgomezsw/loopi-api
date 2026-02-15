@@ -109,7 +109,8 @@ func (r *mysqlInventoryDetailRepository) FindDiscrepancies(ctx context.Context, 
 		LEFT JOIN categories c ON i.category_id = c.id
 		WHERE d.inventory_id = ?
 			AND d.real_value IS NOT NULL
-			AND (d.suggested_value IS NULL OR d.real_value != d.suggested_value)
+			AND d.suggested_value IS NOT NULL
+			AND d.real_value != d.suggested_value
 		ORDER BY c.display_order ASC, i.name ASC
 	`
 

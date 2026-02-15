@@ -14,4 +14,5 @@ var (
 	ErrInvalidDate           = errors.New("invalid date format")
 	ErrInventoryTypeRequired = errors.New("inventory_type is required")
 	ErrInvalidInventoryType  = errors.New("invalid inventory_type value")
+	ErrResponsibleIDRequired = errors.New("responsible_id is required")
 )

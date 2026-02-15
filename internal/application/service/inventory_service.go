@@ -90,7 +90,7 @@ func (s *InventoryService) CreateInventory(ctx context.Context, inventoryType en
 	if inventoryType == entity.InventoryTypeDaily && schedule == nil {
 		return nil, apperrors.New(400, "schedule is required for daily inventories")
 	}
-	// Weekly/monthly inventories should not have a schedule
+	// Non-daily inventories should not have a schedule
 	if inventoryType != entity.InventoryTypeDaily {
 		schedule = nil
 	}
@@ -339,27 +339,29 @@ func (s *InventoryService) CompleteInventory(ctx context.Context, inventoryID ui
 		}
 	}
 
-	// Create issues for discrepancies
+	// Create issues for discrepancies (skip for initial inventories since they establish the baseline)
 	var issues []*entity.InventoryIssue
-	for _, d := range details {
-		if d.HasDiscrepancy() {
-			diff := d.Difference()
-			issue := &entity.InventoryIssue{
-				InventoryDetailID: d.ID,
-				Type:              entity.IssueTypeDiscrepancy,
-				ExpectedValue:     d.SuggestedValue,
-				ActualValue:       d.RealValue,
-				Difference:        &diff,
-				Status:            entity.IssueStatusOpen,
+	if !inventory.IsInitial() {
+		for _, d := range details {
+			if d.HasDiscrepancy() {
+				diff := d.Difference()
+				issue := &entity.InventoryIssue{
+					InventoryDetailID: d.ID,
+					Type:              entity.IssueTypeDiscrepancy,
+					ExpectedValue:     d.SuggestedValue,
+					ActualValue:       d.RealValue,
+					Difference:        &diff,
+					Status:            entity.IssueStatusOpen,
+				}
+				issues = append(issues, issue)
 			}
-			issues = append(issues, issue)
 		}
-	}
 
-	// Save issues
-	if len(issues) > 0 {
-		if err := s.inventoryIssueRepo.CreateBatch(ctx, issues); err != nil {
-			return 0, fmt.Errorf("failed to create issues: %w", err)
+		// Save issues
+		if len(issues) > 0 {
+			if err := s.inventoryIssueRepo.CreateBatch(ctx, issues); err != nil {
+				return 0, fmt.Errorf("failed to create issues: %w", err)
+			}
 		}
 	}
 

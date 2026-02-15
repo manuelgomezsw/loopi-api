@@ -182,7 +182,13 @@ func (r *mysqlInventoryRepository) FindLatestByType(ctx context.Context, invento
 }
 
 // FindPreviousInventory retrieves the previous inventory for calculating suggested values.
+// If no previous inventory of the same type is found, it falls back to the latest completed initial inventory.
 func (r *mysqlInventoryRepository) FindPreviousInventory(ctx context.Context, date time.Time, inventoryType entity.InventoryType, schedule *entity.Schedule) (*entity.Inventory, error) {
+	// Initial inventories don't have a previous inventory
+	if inventoryType == entity.InventoryTypeInitial {
+		return nil, nil
+	}
+
 	var query string
 	var args []interface{}
 
@@ -254,6 +260,32 @@ func (r *mysqlInventoryRepository) FindPreviousInventory(ctx context.Context, da
 	inv, err := r.scanInventory(r.db.QueryRowContext(ctx, query, args...))
 	if err != nil {
 		return nil, fmt.Errorf("failed to find previous inventory: %w", err)
+	}
+
+	// If no previous inventory of the same type was found, fall back to the latest completed initial inventory
+	if inv == nil {
+		inv, err = r.findLatestInitialInventory(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find initial inventory fallback: %w", err)
+		}
+	}
+
+	return inv, nil
+}
+
+// findLatestInitialInventory retrieves the latest completed initial (baseline) inventory.
+func (r *mysqlInventoryRepository) findLatestInitialInventory(ctx context.Context) (*entity.Inventory, error) {
+	query := `
+		SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
+		FROM inventories
+		WHERE inventory_type = 'initial' AND status = 'completed'
+		ORDER BY completed_at DESC
+		LIMIT 1
+	`
+
+	inv, err := r.scanInventory(r.db.QueryRowContext(ctx, query))
+	if err != nil {
+		return nil, fmt.Errorf("failed to find latest initial inventory: %w", err)
 	}
 	return inv, nil
 }

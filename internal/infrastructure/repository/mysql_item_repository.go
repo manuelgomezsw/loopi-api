@@ -100,7 +100,7 @@ func (r *mysqlItemRepository) FindActiveByInventoryType(ctx context.Context, inv
 		whereClause = "i.active = 1 AND i.inventory_frequency = 'daily'"
 	case entity.InventoryTypeWeekly:
 		whereClause = "i.active = 1 AND i.inventory_frequency IN ('daily', 'weekly')"
-	case entity.InventoryTypeMonthly:
+	case entity.InventoryTypeMonthly, entity.InventoryTypeInitial:
 		whereClause = "i.active = 1"
 	default:
 		return nil, fmt.Errorf("invalid inventory type: %s", inventoryType)

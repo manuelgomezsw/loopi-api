@@ -133,8 +133,8 @@ func (r *mysqlEmployeeRepository) FindAllWithFilters(ctx context.Context, role *
 
 	// Get paginated results
 	selectQuery := `SELECT id, username, password_hash, name, last_name, document_type, document_number,
-	                       phone, email, birth_date, role, active, created_at, updated_at` + baseQuery + 
-	               ` ORDER BY name, last_name LIMIT ? OFFSET ?`
+	                       phone, email, birth_date, role, active, created_at, updated_at` + baseQuery +
+		` ORDER BY name, last_name LIMIT ? OFFSET ?`
 	args = append(args, pageSize, (page-1)*pageSize)
 
 	employees, err := r.queryEmployees(ctx, selectQuery, args...)
