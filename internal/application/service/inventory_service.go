@@ -144,17 +144,26 @@ func (s *InventoryService) prepopulateInventoryDetails(ctx context.Context, inve
 		return fmt.Errorf("failed to get previous inventory: %w", err)
 	}
 
-	// Build a map of previous values if available
-	previousValues := make(map[uint16]uint16)
+	// Build a map of previous real value minus shrinkage (sugerido = valor_real_anterior − mermas)
+	type prevVal struct {
+		real     uint16
+		shrinkage uint16
+	}
+	previousValues := make(map[uint16]prevVal)
 	if previousInv != nil {
 		prevDetails, err := s.inventoryDetailRepo.FindByInventoryID(ctx, previousInv.ID)
 		if err != nil {
 			return fmt.Errorf("failed to get previous inventory details: %w", err)
 		}
 		for _, d := range prevDetails {
-			if d.RealValue != nil {
-				previousValues[d.ItemID] = *d.RealValue
+			if d.RealValue == nil {
+				continue
 			}
+			shrink := uint16(0)
+			if d.Shrinkage != nil {
+				shrink = *d.Shrinkage
+			}
+			previousValues[d.ItemID] = prevVal{real: *d.RealValue, shrinkage: shrink}
 		}
 	}
 
@@ -166,9 +175,14 @@ func (s *InventoryService) prepopulateInventoryDetails(ctx context.Context, inve
 			ItemID:      item.ID,
 		}
 
-		// Set suggested value from previous inventory
-		if prevValue, ok := previousValues[item.ID]; ok {
-			detail.SuggestedValue = &prevValue
+		// Set suggested value: real_anterior − mermas (clamped to 0)
+		if pv, ok := previousValues[item.ID]; ok {
+			suggested := int32(pv.real) - int32(pv.shrinkage)
+			if suggested < 0 {
+				suggested = 0
+			}
+			v := uint16(suggested)
+			detail.SuggestedValue = &v
 		}
 
 		details = append(details, detail)

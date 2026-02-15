@@ -11,6 +11,7 @@ type InventoryDetail struct {
 	RealValue      *uint16   `json:"real_value,omitempty"`
 	StockReceived  *uint16   `json:"stock_received,omitempty"`
 	UnitsSold      *uint16   `json:"units_sold,omitempty"`
+	Shrinkage      *uint16   `json:"shrinkage,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 

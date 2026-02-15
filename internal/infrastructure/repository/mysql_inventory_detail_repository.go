@@ -23,16 +23,16 @@ func NewMySQLInventoryDetailRepository(db *sql.DB) repository.InventoryDetailRep
 // FindByID retrieves an inventory detail by its ID.
 func (r *mysqlInventoryDetailRepository) FindByID(ctx context.Context, id uint32) (*entity.InventoryDetail, error) {
 	query := `
-		SELECT id, inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, created_at, updated_at
+		SELECT id, inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, shrinkage, created_at, updated_at
 		FROM inventory_details
 		WHERE id = ?
 	`
 
 	var d entity.InventoryDetail
-	var suggestedValue, realValue, stockReceived, unitsSold sql.NullInt32
+	var suggestedValue, realValue, stockReceived, unitsSold, shrinkage sql.NullInt32
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &d.CreatedAt, &d.UpdatedAt,
+		&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &shrinkage, &d.CreatedAt, &d.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -57,6 +57,10 @@ func (r *mysqlInventoryDetailRepository) FindByID(ctx context.Context, id uint32
 		v := uint16(unitsSold.Int32)
 		d.UnitsSold = &v
 	}
+	if shrinkage.Valid {
+		v := uint16(shrinkage.Int32)
+		d.Shrinkage = &v
+	}
 
 	return &d, nil
 }
@@ -64,7 +68,7 @@ func (r *mysqlInventoryDetailRepository) FindByID(ctx context.Context, id uint32
 // FindByInventoryID retrieves all details for an inventory.
 func (r *mysqlInventoryDetailRepository) FindByInventoryID(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error) {
 	query := `
-		SELECT id, inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, created_at, updated_at
+		SELECT id, inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, shrinkage, created_at, updated_at
 		FROM inventory_details
 		WHERE inventory_id = ?
 		ORDER BY item_id
@@ -80,18 +84,18 @@ func (r *mysqlInventoryDetailRepository) FindByInventoryID(ctx context.Context, 
 }
 
 // FindByInventoryIDWithItems retrieves all details with item information.
-// Items are ordered by category display_order then by item name.
+// Items are ordered alphabetically by item name.
 func (r *mysqlInventoryDetailRepository) FindByInventoryIDWithItems(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error) {
 	query := `
 		SELECT 
-			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.created_at, d.updated_at,
+			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.shrinkage, d.created_at, d.updated_at,
 			i.id, i.type, i.name, i.active, i.inventory_frequency, i.category_id, i.supplier_id, i.cost, i.created_at, i.updated_at,
 			c.name as category_name, c.display_order
 		FROM inventory_details d
 		INNER JOIN items i ON d.item_id = i.id
 		LEFT JOIN categories c ON i.category_id = c.id
 		WHERE d.inventory_id = ?
-		ORDER BY c.display_order ASC, i.name ASC
+		ORDER BY i.name ASC
 	`
 
 	return r.queryDetailsWithItemsAndCategory(ctx, query, inventoryID)
@@ -101,7 +105,7 @@ func (r *mysqlInventoryDetailRepository) FindByInventoryIDWithItems(ctx context.
 func (r *mysqlInventoryDetailRepository) FindDiscrepancies(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error) {
 	query := `
 		SELECT 
-			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.created_at, d.updated_at,
+			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.shrinkage, d.created_at, d.updated_at,
 			i.id, i.type, i.name, i.active, i.inventory_frequency, i.category_id, i.supplier_id, i.cost, i.created_at, i.updated_at,
 			c.name as category_name, c.display_order
 		FROM inventory_details d
@@ -178,13 +182,13 @@ func (r *mysqlInventoryDetailRepository) queryDetailsWithItemsAndCategory(ctx co
 	for rows.Next() {
 		var d entity.InventoryDetail
 		var item entity.Item
-		var suggestedValue, realValue, stockReceived, unitsSold sql.NullInt32
+		var suggestedValue, realValue, stockReceived, unitsSold, shrinkage sql.NullInt32
 		var supplierID sql.NullInt32
 		var categoryName sql.NullString
 		var displayOrder sql.NullInt32
 
 		if err := rows.Scan(
-			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &d.CreatedAt, &d.UpdatedAt,
+			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &shrinkage, &d.CreatedAt, &d.UpdatedAt,
 			&item.ID, &item.Type, &item.Name, &item.Active, &item.InventoryFrequency, &item.CategoryID, &supplierID, &item.Cost, &item.CreatedAt, &item.UpdatedAt,
 			&categoryName, &displayOrder,
 		); err != nil {
@@ -206,6 +210,10 @@ func (r *mysqlInventoryDetailRepository) queryDetailsWithItemsAndCategory(ctx co
 		if unitsSold.Valid {
 			v := uint16(unitsSold.Int32)
 			d.UnitsSold = &v
+		}
+		if shrinkage.Valid {
+			v := uint16(shrinkage.Int32)
+			d.Shrinkage = &v
 		}
 		if supplierID.Valid {
 			v := uint16(supplierID.Int32)
@@ -235,16 +243,16 @@ func (r *mysqlInventoryDetailRepository) queryDetailsWithItemsAndCategory(ctx co
 // FindByInventoryAndItem retrieves a specific detail by inventory and item.
 func (r *mysqlInventoryDetailRepository) FindByInventoryAndItem(ctx context.Context, inventoryID uint32, itemID uint16) (*entity.InventoryDetail, error) {
 	query := `
-		SELECT id, inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, created_at, updated_at
+		SELECT id, inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, shrinkage, created_at, updated_at
 		FROM inventory_details
 		WHERE inventory_id = ? AND item_id = ?
 	`
 
 	var d entity.InventoryDetail
-	var suggestedValue, realValue, stockReceived, unitsSold sql.NullInt32
+	var suggestedValue, realValue, stockReceived, unitsSold, shrinkage sql.NullInt32
 
 	err := r.db.QueryRowContext(ctx, query, inventoryID, itemID).Scan(
-		&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &d.CreatedAt, &d.UpdatedAt,
+		&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &shrinkage, &d.CreatedAt, &d.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -269,6 +277,10 @@ func (r *mysqlInventoryDetailRepository) FindByInventoryAndItem(ctx context.Cont
 		v := uint16(unitsSold.Int32)
 		d.UnitsSold = &v
 	}
+	if shrinkage.Valid {
+		v := uint16(shrinkage.Int32)
+		d.Shrinkage = &v
+	}
 
 	return &d, nil
 }
@@ -276,8 +288,8 @@ func (r *mysqlInventoryDetailRepository) FindByInventoryAndItem(ctx context.Cont
 // Create creates a new inventory detail.
 func (r *mysqlInventoryDetailRepository) Create(ctx context.Context, detail *entity.InventoryDetail) error {
 	query := `
-		INSERT INTO inventory_details (inventory_id, item_id, suggested_value, real_value, stock_received, units_sold)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO inventory_details (inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, shrinkage)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
 	result, err := r.db.ExecContext(ctx, query,
@@ -287,6 +299,7 @@ func (r *mysqlInventoryDetailRepository) Create(ctx context.Context, detail *ent
 		detail.RealValue,
 		detail.StockReceived,
 		detail.UnitsSold,
+		detail.Shrinkage,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create inventory detail: %w", err)
@@ -305,7 +318,7 @@ func (r *mysqlInventoryDetailRepository) Create(ctx context.Context, detail *ent
 func (r *mysqlInventoryDetailRepository) Update(ctx context.Context, detail *entity.InventoryDetail) error {
 	query := `
 		UPDATE inventory_details
-		SET suggested_value = ?, real_value = ?, stock_received = ?, units_sold = ?, updated_at = ?
+		SET suggested_value = ?, real_value = ?, stock_received = ?, units_sold = ?, shrinkage = ?, updated_at = ?
 		WHERE id = ?
 	`
 
@@ -314,6 +327,7 @@ func (r *mysqlInventoryDetailRepository) Update(ctx context.Context, detail *ent
 		detail.RealValue,
 		detail.StockReceived,
 		detail.UnitsSold,
+		detail.Shrinkage,
 		datetime.Now(),
 		detail.ID,
 	)
@@ -328,13 +342,14 @@ func (r *mysqlInventoryDetailRepository) Update(ctx context.Context, detail *ent
 func (r *mysqlInventoryDetailRepository) Upsert(ctx context.Context, detail *entity.InventoryDetail) error {
 	now := datetime.Now()
 	query := `
-		INSERT INTO inventory_details (inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO inventory_details (inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, shrinkage, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			suggested_value = VALUES(suggested_value),
 			real_value = VALUES(real_value),
 			stock_received = VALUES(stock_received),
 			units_sold = VALUES(units_sold),
+			shrinkage = VALUES(shrinkage),
 			updated_at = VALUES(updated_at)
 	`
 
@@ -345,6 +360,7 @@ func (r *mysqlInventoryDetailRepository) Upsert(ctx context.Context, detail *ent
 		detail.RealValue,
 		detail.StockReceived,
 		detail.UnitsSold,
+		detail.Shrinkage,
 		now,
 		now,
 	)
@@ -370,8 +386,8 @@ func (r *mysqlInventoryDetailRepository) CreateBatch(ctx context.Context, detail
 	}
 
 	query := `
-		INSERT INTO inventory_details (inventory_id, item_id, suggested_value, real_value, stock_received, units_sold)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO inventory_details (inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, shrinkage)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -394,6 +410,7 @@ func (r *mysqlInventoryDetailRepository) CreateBatch(ctx context.Context, detail
 			detail.RealValue,
 			detail.StockReceived,
 			detail.UnitsSold,
+			detail.Shrinkage,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert inventory detail: %w", err)
@@ -418,10 +435,10 @@ func (r *mysqlInventoryDetailRepository) scanDetails(rows *sql.Rows) ([]*entity.
 	var details []*entity.InventoryDetail
 	for rows.Next() {
 		var d entity.InventoryDetail
-		var suggestedValue, realValue, stockReceived, unitsSold sql.NullInt32
+		var suggestedValue, realValue, stockReceived, unitsSold, shrinkage sql.NullInt32
 
 		if err := rows.Scan(
-			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &d.CreatedAt, &d.UpdatedAt,
+			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &shrinkage, &d.CreatedAt, &d.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan inventory detail: %w", err)
 		}
@@ -442,6 +459,10 @@ func (r *mysqlInventoryDetailRepository) scanDetails(rows *sql.Rows) ([]*entity.
 			v := uint16(unitsSold.Int32)
 			d.UnitsSold = &v
 		}
+		if shrinkage.Valid {
+			v := uint16(shrinkage.Int32)
+			d.Shrinkage = &v
+		}
 
 		details = append(details, &d)
 	}
@@ -457,7 +478,7 @@ func (r *mysqlInventoryDetailRepository) scanDetails(rows *sql.Rows) ([]*entity.
 func (r *mysqlInventoryDetailRepository) GetRecentDiscrepancies(ctx context.Context, days int) ([]*entity.InventoryDetail, error) {
 	query := `
 		SELECT 
-			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.created_at, d.updated_at,
+			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.shrinkage, d.created_at, d.updated_at,
 			i.id, i.type, i.name, i.active, i.inventory_frequency, i.created_at, i.updated_at,
 			inv.id, inv.inventory_date, inv.inventory_type, inv.schedule, inv.status
 		FROM inventory_details d
@@ -483,11 +504,11 @@ func (r *mysqlInventoryDetailRepository) GetRecentDiscrepancies(ctx context.Cont
 		var d entity.InventoryDetail
 		var item entity.Item
 		var inv entity.Inventory
-		var suggestedValue, realValue, stockReceived, unitsSold sql.NullInt32
+		var suggestedValue, realValue, stockReceived, unitsSold, shrinkage sql.NullInt32
 		var schedule sql.NullString
 
 		if err := rows.Scan(
-			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &d.CreatedAt, &d.UpdatedAt,
+			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &shrinkage, &d.CreatedAt, &d.UpdatedAt,
 			&item.ID, &item.Type, &item.Name, &item.Active, &item.InventoryFrequency, &item.CreatedAt, &item.UpdatedAt,
 			&inv.ID, &inv.InventoryDate, &inv.InventoryType, &schedule, &inv.Status,
 		); err != nil {
@@ -509,6 +530,10 @@ func (r *mysqlInventoryDetailRepository) GetRecentDiscrepancies(ctx context.Cont
 		if unitsSold.Valid {
 			v := uint16(unitsSold.Int32)
 			d.UnitsSold = &v
+		}
+		if shrinkage.Valid {
+			v := uint16(shrinkage.Int32)
+			d.Shrinkage = &v
 		}
 		if schedule.Valid {
 			s := entity.Schedule(schedule.String)

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -123,6 +124,7 @@ type UpdateInventoryDetailRequest struct {
 	RealValue     *uint16 `json:"real_value"`
 	StockReceived *uint16 `json:"stock_received"`
 	UnitsSold     *uint16 `json:"units_sold"`
+	Shrinkage     *uint16 `json:"shrinkage"`
 }
 
 // UpdateInventoryDetail updates a specific inventory detail.
@@ -147,7 +149,11 @@ func (h *AdminHandler) UpdateInventoryDetail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := h.adminService.UpdateInventoryDetail(r.Context(), uint32(inventoryID), uint32(detailID), req.RealValue, req.StockReceived, req.UnitsSold); err != nil {
+	if err := h.adminService.UpdateInventoryDetail(r.Context(), uint32(inventoryID), uint32(detailID), req.RealValue, req.StockReceived, req.UnitsSold, req.Shrinkage); err != nil {
+		if errors.Is(err, service.ErrShrinkageOnlyWhenCompleted) {
+			http.Error(w, `{"error":"solo se pueden editar mermas en inventarios completados"}`, http.StatusBadRequest)
+			return
+		}
 		http.Error(w, `{"error":"failed to update inventory detail"}`, http.StatusInternalServerError)
 		return
 	}

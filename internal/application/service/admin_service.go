@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,9 @@ import (
 	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// ErrShrinkageOnlyWhenCompleted is returned when trying to edit shrinkage on a non-completed inventory.
+var ErrShrinkageOnlyWhenCompleted = errors.New("solo se pueden editar mermas en inventarios completados")
 
 // AdminService handles admin-specific operations.
 type AdminService struct {
@@ -206,6 +210,8 @@ type InventoryDetailView struct {
 }
 
 // InventoryDetailItem represents a single item in the inventory detail.
+// ExpectedValue is computed as suggested_value − shrinkage + stock_received − units_sold,
+// and is used for discrepancy and difference so that admin adjustments (mermas, compras, ventas) resolve differences.
 type InventoryDetailItem struct {
 	DetailID       uint32  `json:"detail_id"`
 	ItemID         uint16  `json:"item_id"`
@@ -215,8 +221,36 @@ type InventoryDetailItem struct {
 	RealValue      *uint16 `json:"real_value"`
 	StockReceived  *uint16 `json:"stock_received"`
 	UnitsSold      *uint16 `json:"units_sold"`
-	Difference     int16   `json:"difference"`
+	Shrinkage      *uint16 `json:"shrinkage"`
+	ExpectedValue  uint16  `json:"expected_value"` // sugerido − mermas + compras − ventas (used for discrepancy)
+	Difference     int16   `json:"difference"`     // real_value − expected_value
 	HasDiscrepancy bool    `json:"has_discrepancy"`
+}
+
+// computeExpectedValue returns expected count for display and discrepancy: sugerido − mermas + compras − ventas.
+// So when the admin fills mermas (or adjusts compras/ventas), the discrepancy is resolved when contado == expected.
+func (s *AdminService) computeExpectedValue(d *entity.InventoryDetail) uint16 {
+	suggested := uint16(0)
+	if d.SuggestedValue != nil {
+		suggested = *d.SuggestedValue
+	}
+	shrinkage := uint16(0)
+	if d.Shrinkage != nil {
+		shrinkage = *d.Shrinkage
+	}
+	stockReceived := uint16(0)
+	if d.StockReceived != nil {
+		stockReceived = *d.StockReceived
+	}
+	unitsSold := uint16(0)
+	if d.UnitsSold != nil {
+		unitsSold = *d.UnitsSold
+	}
+	expected := int32(suggested) - int32(shrinkage) + int32(stockReceived) - int32(unitsSold)
+	if expected < 0 {
+		expected = 0
+	}
+	return uint16(expected)
 }
 
 // GetInventoryDetail returns detailed information about an inventory.
@@ -237,7 +271,13 @@ func (s *AdminService) GetInventoryDetail(ctx context.Context, inventoryID uint3
 	detailItems := make([]InventoryDetailItem, 0, len(details))
 	itemsWithDiff := 0
 	for _, d := range details {
-		hasDiscrepancy := d.HasDiscrepancy()
+		expected := s.computeExpectedValue(d)
+		var diff int16
+		var hasDiscrepancy bool
+		if d.RealValue != nil {
+			diff = int16(*d.RealValue) - int16(expected)
+			hasDiscrepancy = *d.RealValue != expected
+		}
 		if hasDiscrepancy {
 			itemsWithDiff++
 		}
@@ -251,7 +291,9 @@ func (s *AdminService) GetInventoryDetail(ctx context.Context, inventoryID uint3
 			RealValue:      d.RealValue,
 			StockReceived:  d.StockReceived,
 			UnitsSold:      d.UnitsSold,
-			Difference:     d.Difference(),
+			Shrinkage:      d.Shrinkage,
+			ExpectedValue:  expected,
+			Difference:     diff,
 			HasDiscrepancy: hasDiscrepancy,
 		})
 	}
@@ -273,7 +315,20 @@ func (s *AdminService) GetInventoryDetail(ctx context.Context, inventoryID uint3
 }
 
 // UpdateInventoryDetail updates a specific inventory detail (admin can edit closed inventories).
-func (s *AdminService) UpdateInventoryDetail(ctx context.Context, inventoryID uint32, detailID uint32, realValue, stockReceived, unitsSold *uint16) error {
+// Shrinkage can only be set or updated when the inventory is completed.
+func (s *AdminService) UpdateInventoryDetail(ctx context.Context, inventoryID uint32, detailID uint32, realValue, stockReceived, unitsSold, shrinkage *uint16) error {
+	inv, err := s.inventoryRepo.FindByID(ctx, inventoryID)
+	if err != nil {
+		return fmt.Errorf("failed to get inventory: %w", err)
+	}
+	if inv == nil {
+		return fmt.Errorf("inventory not found")
+	}
+
+	if shrinkage != nil && inv.Status != entity.InventoryStatusCompleted {
+		return ErrShrinkageOnlyWhenCompleted
+	}
+
 	detail, err := s.inventoryDetailRepo.FindByID(ctx, detailID)
 	if err != nil {
 		return fmt.Errorf("failed to get inventory detail: %w", err)
@@ -285,6 +340,9 @@ func (s *AdminService) UpdateInventoryDetail(ctx context.Context, inventoryID ui
 	detail.RealValue = realValue
 	detail.StockReceived = stockReceived
 	detail.UnitsSold = unitsSold
+	if shrinkage != nil {
+		detail.Shrinkage = shrinkage
+	}
 
 	if err := s.inventoryDetailRepo.Update(ctx, detail); err != nil {
 		return fmt.Errorf("failed to update inventory detail: %w", err)
