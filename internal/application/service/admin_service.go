@@ -74,46 +74,100 @@ type DashboardData struct {
 	RecentDiscrepancies []DiscrepancySummary `json:"recent_discrepancies"`
 }
 
-// GetDashboard returns dashboard data.
+// GetDashboard returns dashboard data (stats and recent discrepancies computed in service using domain rules).
 func (s *AdminService) GetDashboard(ctx context.Context, days int) (*DashboardData, error) {
-	stats, err := s.inventoryRepo.GetDashboardStats(ctx)
+	today := datetime.Today()
+
+	todayCount, err := s.inventoryRepo.CountInventoriesByDate(ctx, today)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get dashboard stats: %w", err)
+		return nil, fmt.Errorf("failed to count today inventories: %w", err)
 	}
 
-	discrepancies, err := s.inventoryDetailRepo.GetRecentDiscrepancies(ctx, days)
+	pending, err := s.inventoryRepo.CountInProgress(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get recent discrepancies: %w", err)
+		return nil, fmt.Errorf("failed to count pending: %w", err)
 	}
 
-	// Convert to DiscrepancySummary (use domain for expected and difference)
-	recentDiscrepancies := make([]DiscrepancySummary, 0, len(discrepancies))
-	for _, d := range discrepancies {
-		expected := invdomain.ExpectedAtEnd(d)
-		var actual uint16
-		if d.RealValue != nil {
-			actual = *d.RealValue
+	completedToday, err := s.inventoryRepo.FindCompletedInventoriesByDate(ctx, today)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find completed inventories by date: %w", err)
+	}
+
+	withDiscrepancies := 0
+	for _, inv := range completedToday {
+		if s.countItemsWithDiscrepancy(ctx, inv) > 0 {
+			withDiscrepancies++
 		}
-		diff := invdomain.DifferenceFromExpected(d, expected)
+	}
+	withoutDiscrepancies := len(completedToday) - withDiscrepancies
+	if withoutDiscrepancies < 0 {
+		withoutDiscrepancies = 0
+	}
 
-		recentDiscrepancies = append(recentDiscrepancies, DiscrepancySummary{
-			InventoryID:   d.InventoryID,
-			ItemID:        d.ItemID,
-			ItemName:      d.Item.Name,
-			ExpectedValue: expected,
-			ActualValue:   actual,
-			Difference:    diff,
-			InventoryDate: d.Inventory.InventoryDate,
-			InventoryType: string(d.Inventory.InventoryType),
-		})
+	// Recent details (raw); enrich per inventory, filter by domain rule, build summary (limit 20).
+	recentDetails, err := s.inventoryDetailRepo.FindRecentDetailsWithInventory(ctx, days, 100)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recent details: %w", err)
+	}
+
+	// Group by inventory ID and enrich each group, then collect items with discrepancy.
+	type key struct{ invID uint32; itemID uint16 }
+	seen := make(map[key]struct{})
+	recentDiscrepancies := make([]DiscrepancySummary, 0, 20)
+
+	invDetails := make(map[uint32][]*entity.InventoryDetail)
+	for _, d := range recentDetails {
+		invDetails[d.InventoryID] = append(invDetails[d.InventoryID], d)
+	}
+
+	for _, details := range invDetails {
+		if len(details) == 0 {
+			continue
+		}
+		inv := details[0].Inventory
+		if inv == nil {
+			continue
+		}
+		s.enricher.Enrich(ctx, inv, details)
+		for _, d := range details {
+			expected := invdomain.ExpectedAtEnd(d)
+			if !invdomain.HasDiscrepancyFromExpectedEnd(d, expected) {
+				continue
+			}
+			k := key{d.InventoryID, d.ItemID}
+			if _, ok := seen[k]; ok {
+				continue
+			}
+			seen[k] = struct{}{}
+			var actual uint16
+			if d.RealValue != nil {
+				actual = *d.RealValue
+			}
+			recentDiscrepancies = append(recentDiscrepancies, DiscrepancySummary{
+				InventoryID:   d.InventoryID,
+				ItemID:        d.ItemID,
+				ItemName:      d.Item.Name,
+				ExpectedValue: expected,
+				ActualValue:   actual,
+				Difference:    invdomain.DifferenceFromExpected(d, expected),
+				InventoryDate: inv.InventoryDate,
+				InventoryType: string(inv.InventoryType),
+			})
+			if len(recentDiscrepancies) >= 20 {
+				break
+			}
+		}
+		if len(recentDiscrepancies) >= 20 {
+			break
+		}
 	}
 
 	return &DashboardData{
 		Stats: DashboardStats{
-			TodayInventories:     stats.TodayInventories,
-			WithDiscrepancies:    stats.WithDiscrepancies,
-			WithoutDiscrepancies: stats.WithoutDiscrepancies,
-			PendingInventories:   stats.PendingInventories,
+			TodayInventories:     todayCount,
+			WithDiscrepancies:    withDiscrepancies,
+			WithoutDiscrepancies: withoutDiscrepancies,
+			PendingInventories:   pending,
 		},
 		RecentDiscrepancies: recentDiscrepancies,
 	}, nil
@@ -163,16 +217,15 @@ func (s *AdminService) ListInventories(ctx context.Context, filter InventoryFilt
 		filter.PageSize = 20
 	}
 
-	inventories, total, err := s.inventoryRepo.FindAllWithFilters(ctx, filter.DateFrom, filter.DateTo, filter.InventoryType, filter.EmployeeID, filter.HasDiscrepancies, filter.Page, filter.PageSize)
+	inventories, total, err := s.inventoryRepo.FindAllWithFilters(ctx, filter.DateFrom, filter.DateTo, filter.InventoryType, filter.EmployeeID, filter.Page, filter.PageSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list inventories: %w", err)
 	}
 
-	// Recompute items_with_diff per inventory with same logic as GetInventoryDetail (enrich + ExpectedForAdmin)
 	items := make([]InventoryListItem, 0, len(inventories))
 	for _, inv := range inventories {
-		itemsWithDiff := s.countItemsWithDiscrepancy(ctx, inv)
-		items = append(items, InventoryListItem{
+		totalItems, itemsWithDiff := s.getInventoryCounts(ctx, inv)
+		item := InventoryListItem{
 			ID:            inv.ID,
 			InventoryDate: inv.InventoryDate,
 			InventoryType: inv.InventoryType,
@@ -180,11 +233,18 @@ func (s *AdminService) ListInventories(ctx context.Context, filter InventoryFilt
 			Status:        inv.Status,
 			EmployeeID:    inv.ResponsibleID,
 			EmployeeName:  inv.Employee.FullName(),
-			TotalItems:    inv.TotalItems,
+			TotalItems:    totalItems,
 			ItemsWithDiff: itemsWithDiff,
 			StartedAt:     inv.StartedAt,
 			CompletedAt:   inv.CompletedAt,
-		})
+		}
+		if filter.HasDiscrepancies != nil {
+			hasDiff := itemsWithDiff > 0
+			if *filter.HasDiscrepancies != hasDiff {
+				continue
+			}
+		}
+		items = append(items, item)
 	}
 
 	totalPages := (total + filter.PageSize - 1) / filter.PageSize
@@ -234,22 +294,29 @@ type InventoryDetailItem struct {
 
 // countItemsWithDiscrepancy returns the count of details with real != expected (ExpectedForAdmin).
 func (s *AdminService) countItemsWithDiscrepancy(ctx context.Context, inv *entity.Inventory) int {
+	total, withDiff := s.getInventoryCounts(ctx, inv)
+	_ = total
+	return withDiff
+}
+
+// getInventoryCounts returns totalItems and itemsWithDiff for an inventory (enrich + domain rule).
+func (s *AdminService) getInventoryCounts(ctx context.Context, inv *entity.Inventory) (totalItems, itemsWithDiff int) {
 	details, err := s.inventoryDetailRepo.FindByInventoryID(ctx, inv.ID)
 	if err != nil {
-		return 0
+		return 0, 0
 	}
 	s.enricher.Enrich(ctx, inv, details)
-	count := 0
+	totalItems = len(details)
 	for _, d := range details {
 		if d.RealValue == nil {
 			continue
 		}
 		expected := invdomain.ExpectedForAdmin(d)
 		if invdomain.HasDiscrepancyFromExpectedEnd(d, expected) {
-			count++
+			itemsWithDiff++
 		}
 	}
-	return count
+	return totalItems, itemsWithDiff
 }
 
 // GetInventoryDetail returns detailed information about an inventory.
