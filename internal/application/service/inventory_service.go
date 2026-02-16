@@ -395,6 +395,9 @@ func (s *InventoryService) CompleteInventory(ctx context.Context, inventoryID ui
 		return 0, fmt.Errorf("failed to get inventory details: %w", err)
 	}
 
+	// Enrich suggested from previous so ComputeExpectedAtEnd / HasDiscrepancyFromExpectedEnd use correct base (same as summary)
+	s.enrichDetailsWithSuggestedFromPrevious(ctx, inventory, details)
+
 	// Check if all items have been completed
 	for _, d := range details {
 		if !d.IsComplete() {

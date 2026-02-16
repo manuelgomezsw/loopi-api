@@ -477,9 +477,14 @@ func (r *mysqlInventoryRepository) FindAllWithFilters(ctx context.Context, dateF
 		FROM inventories i
 		JOIN employees e ON i.responsible_id = e.id
 		LEFT JOIN (
-			SELECT inventory_id, 
+			SELECT inventory_id,
 			       COUNT(*) as total_items,
-			       SUM(CASE WHEN suggested_value IS NOT NULL AND real_value IS NOT NULL AND suggested_value != real_value THEN 1 ELSE 0 END) as items_with_diff
+			       SUM(CASE
+			             WHEN real_value IS NOT NULL
+			              AND real_value != GREATEST(0,
+			                    COALESCE(suggested_value, 0) - COALESCE(units_sold, 0) + COALESCE(stock_received, 0))
+			             THEN 1 ELSE 0
+			           END) as items_with_diff
 			FROM inventory_details
 			GROUP BY inventory_id
 		) d ON i.id = d.inventory_id

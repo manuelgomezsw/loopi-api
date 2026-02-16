@@ -165,8 +165,10 @@ func (s *AdminService) ListInventories(ctx context.Context, filter InventoryFilt
 		return nil, fmt.Errorf("failed to list inventories: %w", err)
 	}
 
+	// Recompute items_with_diff per inventory with same logic as GetInventoryDetail (enrich + expected = suggested − shrinkage + compras − ventas)
 	items := make([]InventoryListItem, 0, len(inventories))
 	for _, inv := range inventories {
+		itemsWithDiff := s.computeItemsWithDiffForInventory(ctx, inv)
 		items = append(items, InventoryListItem{
 			ID:            inv.ID,
 			InventoryDate: inv.InventoryDate,
@@ -176,7 +178,7 @@ func (s *AdminService) ListInventories(ctx context.Context, filter InventoryFilt
 			EmployeeID:    inv.ResponsibleID,
 			EmployeeName:  inv.Employee.FullName(),
 			TotalItems:    inv.TotalItems,
-			ItemsWithDiff: inv.ItemsWithDiff,
+			ItemsWithDiff: itemsWithDiff,
 			StartedAt:     inv.StartedAt,
 			CompletedAt:   inv.CompletedAt,
 		})
@@ -251,6 +253,27 @@ func (s *AdminService) computeExpectedValue(d *entity.InventoryDetail) uint16 {
 		expected = 0
 	}
 	return uint16(expected)
+}
+
+// computeItemsWithDiffForInventory returns the count of details with real != expected (same rule as GetInventoryDetail).
+// Loads details, enriches suggested from previous, then counts using expected = suggested − shrinkage + compras − ventas.
+func (s *AdminService) computeItemsWithDiffForInventory(ctx context.Context, inv *entity.Inventory) int {
+	details, err := s.inventoryDetailRepo.FindByInventoryID(ctx, inv.ID)
+	if err != nil {
+		return 0
+	}
+	s.enrichDetailsWithSuggestedFromPrevious(ctx, inv, details)
+	count := 0
+	for _, d := range details {
+		if d.RealValue == nil {
+			continue
+		}
+		expected := s.computeExpectedValue(d)
+		if *d.RealValue != expected {
+			count++
+		}
+	}
+	return count
 }
 
 // enrichDetailsWithSuggestedFromPrevious recomputes suggested_value from the previous inventory
