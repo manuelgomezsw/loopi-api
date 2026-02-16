@@ -253,7 +253,32 @@ func (s *AdminService) computeExpectedValue(d *entity.InventoryDetail) uint16 {
 	return uint16(expected)
 }
 
+// enrichDetailsWithSuggestedFromPrevious recomputes suggested_value from the previous inventory
+// (real_anterior only; mermas do not subtract from next period's expected) so admin and employee views match.
+func (s *AdminService) enrichDetailsWithSuggestedFromPrevious(ctx context.Context, inventory *entity.Inventory, details []*entity.InventoryDetail) {
+	previousInv, err := s.inventoryRepo.FindPreviousInventory(ctx, inventory.InventoryDate, inventory.InventoryType, inventory.Schedule)
+	if err != nil || previousInv == nil {
+		return
+	}
+	prevDetails, err := s.inventoryDetailRepo.FindByInventoryID(ctx, previousInv.ID)
+	if err != nil {
+		return
+	}
+	realByItem := make(map[uint16]uint16)
+	for _, d := range prevDetails {
+		if d.RealValue != nil {
+			realByItem[d.ItemID] = *d.RealValue
+		}
+	}
+	for _, d := range details {
+		if v, ok := realByItem[d.ItemID]; ok {
+			d.SuggestedValue = &v
+		}
+	}
+}
+
 // GetInventoryDetail returns detailed information about an inventory.
+// Suggested values are recomputed from the previous inventory (real only) so "esperado" and discrepancies match the employee view.
 func (s *AdminService) GetInventoryDetail(ctx context.Context, inventoryID uint32) (*InventoryDetailView, error) {
 	inventory, err := s.inventoryRepo.FindByIDWithEmployee(ctx, inventoryID)
 	if err != nil {
@@ -267,6 +292,8 @@ func (s *AdminService) GetInventoryDetail(ctx context.Context, inventoryID uint3
 	if err != nil {
 		return nil, fmt.Errorf("failed to get inventory details: %w", err)
 	}
+
+	s.enrichDetailsWithSuggestedFromPrevious(ctx, inventory, details)
 
 	detailItems := make([]InventoryDetailItem, 0, len(details))
 	itemsWithDiff := 0

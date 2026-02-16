@@ -248,19 +248,21 @@ func (h *InventoryHandler) GetDiscrepancies(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Build response
+	// Build response (difference = real - expected_at_end)
 	items := make([]response.DiscrepancyItemResponse, 0, len(details))
 	for _, d := range details {
 		var suggestedVal uint16
 		if d.SuggestedValue != nil {
 			suggestedVal = *d.SuggestedValue
 		}
+		expectedAtEnd := h.inventoryService.ComputeExpectedAtEnd(d)
+		diff := int16(*d.RealValue) - int16(expectedAtEnd)
 
 		item := response.DiscrepancyItemResponse{
 			ItemID:         d.ItemID,
 			SuggestedValue: suggestedVal,
 			RealValue:      *d.RealValue,
-			Difference:     d.Difference(),
+			Difference:     diff,
 			StockReceived:  d.StockReceived,
 			UnitsSold:      d.UnitsSold,
 		}
@@ -408,20 +410,23 @@ func (h *InventoryHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 		if d.SuggestedValue != nil {
 			suggestedVal = *d.SuggestedValue
 		}
+		expectedAtEnd := h.inventoryService.ComputeExpectedAtEnd(d)
+		diff := int16(*d.RealValue) - int16(expectedAtEnd)
+		hasDisc := h.inventoryService.HasDiscrepancyFromExpectedEnd(d)
 
 		item := response.InventorySummaryItem{
 			ItemID:         d.ItemID,
 			SuggestedValue: suggestedVal,
 			RealValue:      *d.RealValue,
-			Difference:     d.Difference(),
-			HasDiscrepancy: d.HasDiscrepancy(),
+			Difference:     diff,
+			HasDiscrepancy: hasDisc,
 			StockReceived:  d.StockReceived,
 			UnitsSold:      d.UnitsSold,
 		}
 		if d.Item != nil {
 			item.Name = d.Item.Name
 		}
-		if d.HasDiscrepancy() {
+		if hasDisc {
 			issuesCount++
 		}
 		items = append(items, item)

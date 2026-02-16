@@ -219,13 +219,33 @@ func (r *mysqlInventoryRepository) FindPreviousInventory(ctx context.Context, da
 			args = []interface{}{date.Format("2006-01-02")}
 
 		case entity.ScheduleClosing:
-			// For closing, get the noon from the same day
-			query = `
+			// For closing, get the noon from the same day; if no noon, use opening same day (many sites only do opening + closing)
+			dateStr := date.Format("2006-01-02")
+			prevInv, prevErr := r.scanInventory(r.db.QueryRowContext(ctx, `
 				SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
 				FROM inventories
 				WHERE inventory_date = ? AND inventory_type = 'daily' AND schedule = 'noon' AND status = 'completed'
-			`
-			args = []interface{}{date.Format("2006-01-02")}
+			`, dateStr))
+			if prevErr != nil {
+				return nil, fmt.Errorf("failed to find previous inventory: %w", prevErr)
+			}
+			if prevInv == nil {
+				prevInv, prevErr = r.scanInventory(r.db.QueryRowContext(ctx, `
+					SELECT id, inventory_date, inventory_type, schedule, status, responsible_id, started_at, completed_at, created_at
+					FROM inventories
+					WHERE inventory_date = ? AND inventory_type = 'daily' AND schedule = 'opening' AND status = 'completed'
+				`, dateStr))
+				if prevErr != nil {
+					return nil, fmt.Errorf("failed to find previous inventory (opening): %w", prevErr)
+				}
+			}
+			if prevInv == nil {
+				prevInv, prevErr = r.findLatestInitialInventory(ctx)
+				if prevErr != nil {
+					return nil, fmt.Errorf("failed to find initial inventory fallback: %w", prevErr)
+				}
+			}
+			return prevInv, nil
 
 		default:
 			return nil, fmt.Errorf("unknown schedule: %s", *schedule)
