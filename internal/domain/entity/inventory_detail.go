@@ -20,23 +20,6 @@ type InventoryDetail struct {
 	Inventory *Inventory `json:"inventory,omitempty"`
 }
 
-// HasDiscrepancy returns true if the real value differs from the suggested value.
-func (d *InventoryDetail) HasDiscrepancy() bool {
-	if d.SuggestedValue == nil || d.RealValue == nil {
-		return false
-	}
-	return *d.SuggestedValue != *d.RealValue
-}
-
-// Difference returns the difference between real and suggested values.
-// Positive means surplus, negative means missing.
-func (d *InventoryDetail) Difference() int16 {
-	if d.SuggestedValue == nil || d.RealValue == nil {
-		return 0
-	}
-	return int16(*d.RealValue) - int16(*d.SuggestedValue)
-}
-
 // IsComplete returns true if the real value has been set.
 func (d *InventoryDetail) IsComplete() bool {
 	return d.RealValue != nil

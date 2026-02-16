@@ -86,16 +86,15 @@ func (s *AdminService) GetDashboard(ctx context.Context, days int) (*DashboardDa
 		return nil, fmt.Errorf("failed to get recent discrepancies: %w", err)
 	}
 
-	// Convert to DiscrepancySummary
+	// Convert to DiscrepancySummary (use domain for expected and difference)
 	recentDiscrepancies := make([]DiscrepancySummary, 0, len(discrepancies))
 	for _, d := range discrepancies {
-		var expected, actual uint16
-		if d.SuggestedValue != nil {
-			expected = *d.SuggestedValue
-		}
+		expected := invdomain.ExpectedAtEnd(d)
+		var actual uint16
 		if d.RealValue != nil {
 			actual = *d.RealValue
 		}
+		diff := invdomain.DifferenceFromExpected(d, expected)
 
 		recentDiscrepancies = append(recentDiscrepancies, DiscrepancySummary{
 			InventoryID:   d.InventoryID,
@@ -103,7 +102,7 @@ func (s *AdminService) GetDashboard(ctx context.Context, days int) (*DashboardDa
 			ItemName:      d.Item.Name,
 			ExpectedValue: expected,
 			ActualValue:   actual,
-			Difference:    d.Difference(),
+			Difference:    diff,
 			InventoryDate: d.Inventory.InventoryDate,
 			InventoryType: string(d.Inventory.InventoryType),
 		})
