@@ -16,7 +16,6 @@ import (
 type InventoryService struct {
 	inventoryRepo       repository.InventoryRepository
 	inventoryDetailRepo repository.InventoryDetailRepository
-	inventoryIssueRepo  repository.InventoryIssueRepository
 	itemRepo            repository.ItemRepository
 	enricher            *invdomain.Enricher
 }
@@ -25,14 +24,12 @@ type InventoryService struct {
 func NewInventoryService(
 	inventoryRepo repository.InventoryRepository,
 	inventoryDetailRepo repository.InventoryDetailRepository,
-	inventoryIssueRepo repository.InventoryIssueRepository,
 	itemRepo repository.ItemRepository,
 	enricher *invdomain.Enricher,
 ) *InventoryService {
 	return &InventoryService{
 		inventoryRepo:       inventoryRepo,
 		inventoryDetailRepo: inventoryDetailRepo,
-		inventoryIssueRepo:  inventoryIssueRepo,
 		itemRepo:            itemRepo,
 		enricher:            enricher,
 	}
@@ -364,38 +361,20 @@ func (s *InventoryService) CompleteInventory(ctx context.Context, inventoryID ui
 		}
 	}
 
-	// Create issues for discrepancies (real != expected_at_end; skip for initial inventories)
-	var issues []*entity.InventoryIssue
+	// Count discrepancies (real != expected_at_end; skip for initial inventories). No persistence.
+	discrepancyCount := 0
 	if !inventory.IsInitial() {
 		for _, d := range details {
 			expectedAtEnd := invdomain.ExpectedAtEnd(d)
 			if invdomain.HasDiscrepancyFromExpectedEnd(d, expectedAtEnd) {
-				diff := invdomain.DifferenceFromExpected(d, expectedAtEnd)
-				expVal := expectedAtEnd
-				issue := &entity.InventoryIssue{
-					InventoryDetailID: d.ID,
-					Type:              entity.IssueTypeDiscrepancy,
-					ExpectedValue:     &expVal,
-					ActualValue:       d.RealValue,
-					Difference:        &diff,
-					Status:            entity.IssueStatusOpen,
-				}
-				issues = append(issues, issue)
-			}
-		}
-
-		// Save issues
-		if len(issues) > 0 {
-			if err := s.inventoryIssueRepo.CreateBatch(ctx, issues); err != nil {
-				return 0, fmt.Errorf("failed to create issues: %w", err)
+				discrepancyCount++
 			}
 		}
 	}
 
-	// Complete the inventory
 	if err := s.inventoryRepo.Complete(ctx, inventoryID); err != nil {
 		return 0, fmt.Errorf("failed to complete inventory: %w", err)
 	}
 
-	return len(issues), nil
+	return discrepancyCount, nil
 }

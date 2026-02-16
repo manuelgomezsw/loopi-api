@@ -49,7 +49,6 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 	itemRepo := repository.NewMySQLItemRepository(db)
 	inventoryRepo := repository.NewMySQLInventoryRepository(db)
 	inventoryDetailRepo := repository.NewMySQLInventoryDetailRepository(db)
-	inventoryIssueRepo := repository.NewMySQLInventoryIssueRepository(db)
 	categoryRepo := repository.NewMySQLCategoryRepository(db)
 	supplierRepo := repository.NewMySQLSupplierRepository(db)
 
@@ -60,7 +59,6 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 	inventoryService := service.NewInventoryService(
 		inventoryRepo,
 		inventoryDetailRepo,
-		inventoryIssueRepo,
 		itemRepo,
 		inventoryEnricher,
 	)
