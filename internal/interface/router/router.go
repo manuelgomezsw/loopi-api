@@ -8,6 +8,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/manuelgomezsw/loopi-api/internal/application/service"
+	"github.com/manuelgomezsw/loopi-api/internal/domain/inventory"
 	"github.com/manuelgomezsw/loopi-api/internal/infrastructure/auth"
 	"github.com/manuelgomezsw/loopi-api/internal/infrastructure/repository"
 	"github.com/manuelgomezsw/loopi-api/internal/interface/handler"
@@ -52,6 +53,8 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 	categoryRepo := repository.NewMySQLCategoryRepository(db)
 	supplierRepo := repository.NewMySQLSupplierRepository(db)
 
+	inventoryEnricher := inventory.NewEnricher(inventoryRepo, inventoryDetailRepo)
+
 	// Initialize services
 	authService := service.NewAuthService(employeeRepo, jwtManager)
 	inventoryService := service.NewInventoryService(
@@ -59,6 +62,7 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 		inventoryDetailRepo,
 		inventoryIssueRepo,
 		itemRepo,
+		inventoryEnricher,
 	)
 	adminService := service.NewAdminService(
 		inventoryRepo,
@@ -67,6 +71,7 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 		itemRepo,
 		categoryRepo,
 		supplierRepo,
+		inventoryEnricher,
 	)
 
 	// Initialize handlers

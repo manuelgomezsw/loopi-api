@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
+	invdomain "github.com/manuelgomezsw/loopi-api/internal/domain/inventory"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
 	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 	apperrors "github.com/manuelgomezsw/loopi-api/pkg/errors"
@@ -17,6 +18,7 @@ type InventoryService struct {
 	inventoryDetailRepo repository.InventoryDetailRepository
 	inventoryIssueRepo  repository.InventoryIssueRepository
 	itemRepo            repository.ItemRepository
+	enricher            *invdomain.Enricher
 }
 
 // NewInventoryService creates a new inventory service.
@@ -25,12 +27,14 @@ func NewInventoryService(
 	inventoryDetailRepo repository.InventoryDetailRepository,
 	inventoryIssueRepo repository.InventoryIssueRepository,
 	itemRepo repository.ItemRepository,
+	enricher *invdomain.Enricher,
 ) *InventoryService {
 	return &InventoryService{
 		inventoryRepo:       inventoryRepo,
 		inventoryDetailRepo: inventoryDetailRepo,
 		inventoryIssueRepo:  inventoryIssueRepo,
 		itemRepo:            itemRepo,
+		enricher:            enricher,
 	}
 }
 
@@ -198,64 +202,19 @@ func (s *InventoryService) GetInventoryItems(ctx context.Context, inventoryID ui
 		return nil, nil, fmt.Errorf("failed to get inventory details: %w", err)
 	}
 
-	s.enrichDetailsWithSuggestedFromPrevious(ctx, inventory, details)
+	s.enricher.Enrich(ctx, inventory, details)
 	return inventory, details, nil
 }
 
-// enrichDetailsWithSuggestedFromPrevious recomputes suggested_value from the previous inventory
-// (real_anterior only; mermas do not subtract from next period's expected) and overwrites each detail's SuggestedValue for response.
-func (s *InventoryService) enrichDetailsWithSuggestedFromPrevious(ctx context.Context, inventory *entity.Inventory, details []*entity.InventoryDetail) {
-	previousInv, err := s.inventoryRepo.FindPreviousInventory(ctx, inventory.InventoryDate, inventory.InventoryType, inventory.Schedule)
-	if err != nil || previousInv == nil {
-		return
-	}
-	prevDetails, err := s.inventoryDetailRepo.FindByInventoryID(ctx, previousInv.ID)
-	if err != nil {
-		return
-	}
-	// suggested = real_anterior (por ítem); merma es control/auditoría del periodo anterior
-	realByItem := make(map[uint16]uint16)
-	for _, d := range prevDetails {
-		if d.RealValue != nil {
-			realByItem[d.ItemID] = *d.RealValue
-		}
-	}
-	for _, d := range details {
-		if v, ok := realByItem[d.ItemID]; ok {
-			d.SuggestedValue = &v
-		}
-	}
-}
-
-// ComputeExpectedAtEnd returns the expected count at end of period: suggested − units_sold + stock_received (clamped to 0).
-// Used for summary and discrepancy logic when the employee has entered sales/purchases.
+// ComputeExpectedAtEnd returns the expected count at end of period (delegates to Inventory domain).
 func (s *InventoryService) ComputeExpectedAtEnd(d *entity.InventoryDetail) uint16 {
-	suggested := uint16(0)
-	if d.SuggestedValue != nil {
-		suggested = *d.SuggestedValue
-	}
-	unitsSold := uint16(0)
-	if d.UnitsSold != nil {
-		unitsSold = *d.UnitsSold
-	}
-	stockReceived := uint16(0)
-	if d.StockReceived != nil {
-		stockReceived = *d.StockReceived
-	}
-	expected := int32(suggested) + int32(stockReceived) - int32(unitsSold)
-	if expected < 0 {
-		expected = 0
-	}
-	return uint16(expected)
+	return invdomain.ExpectedAtEnd(d)
 }
 
-// HasDiscrepancyFromExpectedEnd returns true when real_value != expected_at_end (suggested − sold + received).
+// HasDiscrepancyFromExpectedEnd returns true when real_value != expected_at_end (delegates to Inventory domain).
 func (s *InventoryService) HasDiscrepancyFromExpectedEnd(d *entity.InventoryDetail) bool {
-	if d.RealValue == nil {
-		return false
-	}
-	expected := s.ComputeExpectedAtEnd(d)
-	return *d.RealValue != expected
+	expected := invdomain.ExpectedAtEnd(d)
+	return invdomain.HasDiscrepancyFromExpectedEnd(d, expected)
 }
 
 // GetDiscrepancies returns items with discrepancies (real_value != expected_at_end).
@@ -273,11 +232,12 @@ func (s *InventoryService) GetDiscrepancies(ctx context.Context, inventoryID uin
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get inventory details: %w", err)
 	}
-	s.enrichDetailsWithSuggestedFromPrevious(ctx, inventory, allDetails)
+	s.enricher.Enrich(ctx, inventory, allDetails)
 
 	details := make([]*entity.InventoryDetail, 0, len(allDetails))
 	for _, d := range allDetails {
-		if s.HasDiscrepancyFromExpectedEnd(d) {
+		expected := invdomain.ExpectedAtEnd(d)
+		if invdomain.HasDiscrepancyFromExpectedEnd(d, expected) {
 			details = append(details, d)
 		}
 	}
@@ -395,8 +355,7 @@ func (s *InventoryService) CompleteInventory(ctx context.Context, inventoryID ui
 		return 0, fmt.Errorf("failed to get inventory details: %w", err)
 	}
 
-	// Enrich suggested from previous so ComputeExpectedAtEnd / HasDiscrepancyFromExpectedEnd use correct base (same as summary)
-	s.enrichDetailsWithSuggestedFromPrevious(ctx, inventory, details)
+	s.enricher.Enrich(ctx, inventory, details)
 
 	// Check if all items have been completed
 	for _, d := range details {
@@ -409,13 +368,14 @@ func (s *InventoryService) CompleteInventory(ctx context.Context, inventoryID ui
 	var issues []*entity.InventoryIssue
 	if !inventory.IsInitial() {
 		for _, d := range details {
-			if s.HasDiscrepancyFromExpectedEnd(d) {
-				expectedAtEnd := s.ComputeExpectedAtEnd(d)
-				diff := int16(*d.RealValue) - int16(expectedAtEnd)
+			expectedAtEnd := invdomain.ExpectedAtEnd(d)
+			if invdomain.HasDiscrepancyFromExpectedEnd(d, expectedAtEnd) {
+				diff := invdomain.DifferenceFromExpected(d, expectedAtEnd)
+				expVal := expectedAtEnd
 				issue := &entity.InventoryIssue{
 					InventoryDetailID: d.ID,
 					Type:              entity.IssueTypeDiscrepancy,
-					ExpectedValue:     &expectedAtEnd,
+					ExpectedValue:     &expVal,
 					ActualValue:       d.RealValue,
 					Difference:        &diff,
 					Status:            entity.IssueStatusOpen,

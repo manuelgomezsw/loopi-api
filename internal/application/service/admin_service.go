@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
+	invdomain "github.com/manuelgomezsw/loopi-api/internal/domain/inventory"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
 	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // ErrShrinkageOnlyWhenCompleted is returned when trying to edit shrinkage on a non-completed inventory.
-var ErrShrinkageOnlyWhenCompleted = errors.New("solo se pueden editar mermas en inventarios completados")
+var ErrShrinkageOnlyWhenCompleted = errors.New("shrinkage can only be edited on completed inventories")
 
 // AdminService handles admin-specific operations.
 type AdminService struct {
@@ -23,6 +24,7 @@ type AdminService struct {
 	itemRepo            repository.ItemRepository
 	categoryRepo        repository.CategoryRepository
 	supplierRepo        repository.SupplierRepository
+	enricher            *invdomain.Enricher
 }
 
 // NewAdminService creates a new admin service.
@@ -33,6 +35,7 @@ func NewAdminService(
 	itemRepo repository.ItemRepository,
 	categoryRepo repository.CategoryRepository,
 	supplierRepo repository.SupplierRepository,
+	enricher *invdomain.Enricher,
 ) *AdminService {
 	return &AdminService{
 		inventoryRepo:       inventoryRepo,
@@ -41,6 +44,7 @@ func NewAdminService(
 		itemRepo:            itemRepo,
 		categoryRepo:        categoryRepo,
 		supplierRepo:        supplierRepo,
+		enricher:            enricher,
 	}
 }
 
@@ -165,10 +169,10 @@ func (s *AdminService) ListInventories(ctx context.Context, filter InventoryFilt
 		return nil, fmt.Errorf("failed to list inventories: %w", err)
 	}
 
-	// Recompute items_with_diff per inventory with same logic as GetInventoryDetail (enrich + expected = suggested − shrinkage + compras − ventas)
+	// Recompute items_with_diff per inventory with same logic as GetInventoryDetail (enrich + ExpectedForAdmin)
 	items := make([]InventoryListItem, 0, len(inventories))
 	for _, inv := range inventories {
-		itemsWithDiff := s.computeItemsWithDiffForInventory(ctx, inv)
+		itemsWithDiff := s.countItemsWithDiscrepancy(ctx, inv)
 		items = append(items, InventoryListItem{
 			ID:            inv.ID,
 			InventoryDate: inv.InventoryDate,
@@ -229,79 +233,28 @@ type InventoryDetailItem struct {
 	HasDiscrepancy bool    `json:"has_discrepancy"`
 }
 
-// computeExpectedValue returns expected count for display and discrepancy: sugerido − mermas + compras − ventas.
-// So when the admin fills mermas (or adjusts compras/ventas), the discrepancy is resolved when contado == expected.
-func (s *AdminService) computeExpectedValue(d *entity.InventoryDetail) uint16 {
-	suggested := uint16(0)
-	if d.SuggestedValue != nil {
-		suggested = *d.SuggestedValue
-	}
-	shrinkage := uint16(0)
-	if d.Shrinkage != nil {
-		shrinkage = *d.Shrinkage
-	}
-	stockReceived := uint16(0)
-	if d.StockReceived != nil {
-		stockReceived = *d.StockReceived
-	}
-	unitsSold := uint16(0)
-	if d.UnitsSold != nil {
-		unitsSold = *d.UnitsSold
-	}
-	expected := int32(suggested) - int32(shrinkage) + int32(stockReceived) - int32(unitsSold)
-	if expected < 0 {
-		expected = 0
-	}
-	return uint16(expected)
-}
-
-// computeItemsWithDiffForInventory returns the count of details with real != expected (same rule as GetInventoryDetail).
-// Loads details, enriches suggested from previous, then counts using expected = suggested − shrinkage + compras − ventas.
-func (s *AdminService) computeItemsWithDiffForInventory(ctx context.Context, inv *entity.Inventory) int {
+// countItemsWithDiscrepancy returns the count of details with real != expected (ExpectedForAdmin).
+func (s *AdminService) countItemsWithDiscrepancy(ctx context.Context, inv *entity.Inventory) int {
 	details, err := s.inventoryDetailRepo.FindByInventoryID(ctx, inv.ID)
 	if err != nil {
 		return 0
 	}
-	s.enrichDetailsWithSuggestedFromPrevious(ctx, inv, details)
+	s.enricher.Enrich(ctx, inv, details)
 	count := 0
 	for _, d := range details {
 		if d.RealValue == nil {
 			continue
 		}
-		expected := s.computeExpectedValue(d)
-		if *d.RealValue != expected {
+		expected := invdomain.ExpectedForAdmin(d)
+		if invdomain.HasDiscrepancyFromExpectedEnd(d, expected) {
 			count++
 		}
 	}
 	return count
 }
 
-// enrichDetailsWithSuggestedFromPrevious recomputes suggested_value from the previous inventory
-// (real_anterior only; mermas do not subtract from next period's expected) so admin and employee views match.
-func (s *AdminService) enrichDetailsWithSuggestedFromPrevious(ctx context.Context, inventory *entity.Inventory, details []*entity.InventoryDetail) {
-	previousInv, err := s.inventoryRepo.FindPreviousInventory(ctx, inventory.InventoryDate, inventory.InventoryType, inventory.Schedule)
-	if err != nil || previousInv == nil {
-		return
-	}
-	prevDetails, err := s.inventoryDetailRepo.FindByInventoryID(ctx, previousInv.ID)
-	if err != nil {
-		return
-	}
-	realByItem := make(map[uint16]uint16)
-	for _, d := range prevDetails {
-		if d.RealValue != nil {
-			realByItem[d.ItemID] = *d.RealValue
-		}
-	}
-	for _, d := range details {
-		if v, ok := realByItem[d.ItemID]; ok {
-			d.SuggestedValue = &v
-		}
-	}
-}
-
 // GetInventoryDetail returns detailed information about an inventory.
-// Suggested values are recomputed from the previous inventory (real only) so "esperado" and discrepancies match the employee view.
+// Suggested values are recomputed from the previous inventory (real only) so expected and discrepancies match the employee view.
 func (s *AdminService) GetInventoryDetail(ctx context.Context, inventoryID uint32) (*InventoryDetailView, error) {
 	inventory, err := s.inventoryRepo.FindByIDWithEmployee(ctx, inventoryID)
 	if err != nil {
@@ -316,18 +269,14 @@ func (s *AdminService) GetInventoryDetail(ctx context.Context, inventoryID uint3
 		return nil, fmt.Errorf("failed to get inventory details: %w", err)
 	}
 
-	s.enrichDetailsWithSuggestedFromPrevious(ctx, inventory, details)
+	s.enricher.Enrich(ctx, inventory, details)
 
 	detailItems := make([]InventoryDetailItem, 0, len(details))
 	itemsWithDiff := 0
 	for _, d := range details {
-		expected := s.computeExpectedValue(d)
-		var diff int16
-		var hasDiscrepancy bool
-		if d.RealValue != nil {
-			diff = int16(*d.RealValue) - int16(expected)
-			hasDiscrepancy = *d.RealValue != expected
-		}
+		expected := invdomain.ExpectedForAdmin(d)
+		diff := invdomain.DifferenceFromExpected(d, expected)
+		hasDiscrepancy := invdomain.HasDiscrepancyFromExpectedEnd(d, expected)
 		if hasDiscrepancy {
 			itemsWithDiff++
 		}
