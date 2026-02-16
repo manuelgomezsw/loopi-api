@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
+	employeedomain "github.com/manuelgomezsw/loopi-api/internal/domain/employee"
 	invdomain "github.com/manuelgomezsw/loopi-api/internal/domain/inventory"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
 	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
@@ -856,7 +857,7 @@ func (s *AdminService) UpdateEmployeeStatus(ctx context.Context, id uint16, acti
 	return nil
 }
 
-// ResetEmployeePassword resets an employee's password to default (document_number + birth_year).
+// ResetEmployeePassword resets an employee's password to default (domain rule: document_number + birth_year, etc.).
 func (s *AdminService) ResetEmployeePassword(ctx context.Context, id uint16) error {
 	employee, err := s.employeeRepo.FindByID(ctx, id)
 	if err != nil {
@@ -866,16 +867,7 @@ func (s *AdminService) ResetEmployeePassword(ctx context.Context, id uint16) err
 		return fmt.Errorf("employee not found")
 	}
 
-	// Generate default password: document_number + birth_year
-	var defaultPassword string
-	if employee.DocumentNumber != nil && employee.BirthDate != nil {
-		defaultPassword = *employee.DocumentNumber + fmt.Sprintf("%d", employee.BirthDate.Year())
-	} else if employee.DocumentNumber != nil {
-		defaultPassword = *employee.DocumentNumber
-	} else {
-		defaultPassword = "password123" // Fallback if no document
-	}
-
+	defaultPassword := employeedomain.DefaultPasswordForReset(employee)
 	passwordHash, err := hashPassword(defaultPassword)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
