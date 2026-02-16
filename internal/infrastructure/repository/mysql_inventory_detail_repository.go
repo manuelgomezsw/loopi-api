@@ -101,24 +101,83 @@ func (r *mysqlInventoryDetailRepository) FindByInventoryIDWithItems(ctx context.
 	return r.queryDetailsWithItemsAndCategory(ctx, query, inventoryID)
 }
 
-// FindDiscrepancies retrieves details where real_value differs from suggested_value.
-func (r *mysqlInventoryDetailRepository) FindDiscrepancies(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error) {
+// FindRecentDetailsWithInventory returns details from completed inventories in the last N days, with item and inventory (raw data; no discrepancy filter).
+func (r *mysqlInventoryDetailRepository) FindRecentDetailsWithInventory(ctx context.Context, days int, limit int) ([]*entity.InventoryDetail, error) {
+	if limit <= 0 {
+		limit = 20
+	}
 	query := `
 		SELECT 
 			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.shrinkage, d.created_at, d.updated_at,
-			i.id, i.type, i.name, i.active, i.inventory_frequency, i.category_id, i.supplier_id, i.cost, i.created_at, i.updated_at,
-			c.name as category_name, c.display_order
+			i.id, i.type, i.name, i.active, i.inventory_frequency, i.created_at, i.updated_at,
+			inv.id, inv.inventory_date, inv.inventory_type, inv.schedule, inv.status
 		FROM inventory_details d
 		INNER JOIN items i ON d.item_id = i.id
-		LEFT JOIN categories c ON i.category_id = c.id
-		WHERE d.inventory_id = ?
+		INNER JOIN inventories inv ON d.inventory_id = inv.id
+		WHERE inv.inventory_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+			AND inv.status = 'completed'
 			AND d.real_value IS NOT NULL
-			AND d.suggested_value IS NOT NULL
-			AND d.real_value != d.suggested_value
-		ORDER BY c.display_order ASC, i.name ASC
+		ORDER BY inv.inventory_date DESC, inv.id, i.name
+		LIMIT ?
 	`
 
-	return r.queryDetailsWithItemsAndCategory(ctx, query, inventoryID)
+	rows, err := r.db.QueryContext(ctx, query, days, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query recent details with inventory: %w", err)
+	}
+	defer rows.Close()
+
+	var details []*entity.InventoryDetail
+	for rows.Next() {
+		var d entity.InventoryDetail
+		var item entity.Item
+		var inv entity.Inventory
+		var suggestedValue, realValue, stockReceived, unitsSold, shrinkage sql.NullInt32
+		var schedule sql.NullString
+
+		if err := rows.Scan(
+			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &shrinkage, &d.CreatedAt, &d.UpdatedAt,
+			&item.ID, &item.Type, &item.Name, &item.Active, &item.InventoryFrequency, &item.CreatedAt, &item.UpdatedAt,
+			&inv.ID, &inv.InventoryDate, &inv.InventoryType, &schedule, &inv.Status,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan detail: %w", err)
+		}
+
+		if suggestedValue.Valid {
+			v := uint16(suggestedValue.Int32)
+			d.SuggestedValue = &v
+		}
+		if realValue.Valid {
+			v := uint16(realValue.Int32)
+			d.RealValue = &v
+		}
+		if stockReceived.Valid {
+			v := uint16(stockReceived.Int32)
+			d.StockReceived = &v
+		}
+		if unitsSold.Valid {
+			v := uint16(unitsSold.Int32)
+			d.UnitsSold = &v
+		}
+		if shrinkage.Valid {
+			v := uint16(shrinkage.Int32)
+			d.Shrinkage = &v
+		}
+		if schedule.Valid {
+			s := entity.Schedule(schedule.String)
+			inv.Schedule = &s
+		}
+
+		d.Item = &item
+		d.Inventory = &inv
+		details = append(details, &d)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating recent details: %w", err)
+	}
+
+	return details, nil
 }
 
 // queryDetailsWithItems is a helper to query details joined with items.
@@ -474,80 +533,3 @@ func (r *mysqlInventoryDetailRepository) scanDetails(rows *sql.Rows) ([]*entity.
 	return details, nil
 }
 
-// GetRecentDiscrepancies retrieves discrepancies from the last N days with item and inventory info.
-func (r *mysqlInventoryDetailRepository) GetRecentDiscrepancies(ctx context.Context, days int) ([]*entity.InventoryDetail, error) {
-	query := `
-		SELECT 
-			d.id, d.inventory_id, d.item_id, d.suggested_value, d.real_value, d.stock_received, d.units_sold, d.shrinkage, d.created_at, d.updated_at,
-			i.id, i.type, i.name, i.active, i.inventory_frequency, i.created_at, i.updated_at,
-			inv.id, inv.inventory_date, inv.inventory_type, inv.schedule, inv.status
-		FROM inventory_details d
-		INNER JOIN items i ON d.item_id = i.id
-		INNER JOIN inventories inv ON d.inventory_id = inv.id
-		WHERE inv.inventory_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-			AND inv.status = 'completed'
-			AND d.suggested_value IS NOT NULL 
-			AND d.real_value IS NOT NULL 
-			AND d.suggested_value != d.real_value
-		ORDER BY inv.inventory_date DESC, i.name
-		LIMIT 20
-	`
-
-	rows, err := r.db.QueryContext(ctx, query, days)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query recent discrepancies: %w", err)
-	}
-	defer rows.Close()
-
-	var details []*entity.InventoryDetail
-	for rows.Next() {
-		var d entity.InventoryDetail
-		var item entity.Item
-		var inv entity.Inventory
-		var suggestedValue, realValue, stockReceived, unitsSold, shrinkage sql.NullInt32
-		var schedule sql.NullString
-
-		if err := rows.Scan(
-			&d.ID, &d.InventoryID, &d.ItemID, &suggestedValue, &realValue, &stockReceived, &unitsSold, &shrinkage, &d.CreatedAt, &d.UpdatedAt,
-			&item.ID, &item.Type, &item.Name, &item.Active, &item.InventoryFrequency, &item.CreatedAt, &item.UpdatedAt,
-			&inv.ID, &inv.InventoryDate, &inv.InventoryType, &schedule, &inv.Status,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan discrepancy: %w", err)
-		}
-
-		if suggestedValue.Valid {
-			v := uint16(suggestedValue.Int32)
-			d.SuggestedValue = &v
-		}
-		if realValue.Valid {
-			v := uint16(realValue.Int32)
-			d.RealValue = &v
-		}
-		if stockReceived.Valid {
-			v := uint16(stockReceived.Int32)
-			d.StockReceived = &v
-		}
-		if unitsSold.Valid {
-			v := uint16(unitsSold.Int32)
-			d.UnitsSold = &v
-		}
-		if shrinkage.Valid {
-			v := uint16(shrinkage.Int32)
-			d.Shrinkage = &v
-		}
-		if schedule.Valid {
-			s := entity.Schedule(schedule.String)
-			inv.Schedule = &s
-		}
-
-		d.Item = &item
-		d.Inventory = &inv
-		details = append(details, &d)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating discrepancies: %w", err)
-	}
-
-	return details, nil
-}

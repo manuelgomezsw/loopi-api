@@ -7,13 +7,6 @@ import (
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 )
 
-// DashboardStats contains statistics for the admin dashboard.
-type DashboardStats struct {
-	TodayInventories     int
-	WithDiscrepancies    int
-	WithoutDiscrepancies int
-	PendingInventories   int
-}
 
 // InventoryRepository defines the interface for inventory data access.
 type InventoryRepository interface {
@@ -38,11 +31,14 @@ type InventoryRepository interface {
 	// FindPreviousInventory retrieves the previous inventory for calculating suggested values.
 	FindPreviousInventory(ctx context.Context, date time.Time, inventoryType entity.InventoryType, schedule *entity.Schedule) (*entity.Inventory, error)
 
-	// FindAllWithFilters retrieves inventories with optional filters and pagination.
-	FindAllWithFilters(ctx context.Context, dateFrom, dateTo *time.Time, inventoryType *entity.InventoryType, employeeID *uint16, hasDiscrepancies *bool, page, pageSize int) ([]*entity.Inventory, int, error)
+	// FindAllWithFilters retrieves inventories with optional filters and pagination (data only; no discrepancy logic).
+	FindAllWithFilters(ctx context.Context, dateFrom, dateTo *time.Time, inventoryType *entity.InventoryType, employeeID *uint16, page, pageSize int) ([]*entity.Inventory, int, error)
 
-	// GetDashboardStats retrieves statistics for the admin dashboard.
-	GetDashboardStats(ctx context.Context) (*DashboardStats, error)
+	// CountInventoriesByDate returns the number of inventories for the given date.
+	CountInventoriesByDate(ctx context.Context, date time.Time) (int, error)
+
+	// FindCompletedInventoriesByDate returns completed inventories for the given date (minimal fields for dashboard stats).
+	FindCompletedInventoriesByDate(ctx context.Context, date time.Time) ([]*entity.Inventory, error)
 
 	// FindAllInProgress retrieves all in-progress inventories.
 	FindAllInProgress(ctx context.Context) ([]*entity.Inventory, error)
@@ -74,11 +70,8 @@ type InventoryDetailRepository interface {
 	// FindByInventoryAndItem retrieves a specific detail by inventory and item.
 	FindByInventoryAndItem(ctx context.Context, inventoryID uint32, itemID uint16) (*entity.InventoryDetail, error)
 
-	// FindDiscrepancies retrieves details where real_value differs from suggested_value.
-	FindDiscrepancies(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error)
-
-	// GetRecentDiscrepancies retrieves discrepancies from the last N days with item and inventory info.
-	GetRecentDiscrepancies(ctx context.Context, days int) ([]*entity.InventoryDetail, error)
+	// FindRecentDetailsWithInventory returns details from completed inventories in the last N days, with item and inventory (raw data; no discrepancy filter).
+	FindRecentDetailsWithInventory(ctx context.Context, days int, limit int) ([]*entity.InventoryDetail, error)
 
 	// Create creates a new inventory detail.
 	Create(ctx context.Context, detail *entity.InventoryDetail) error
