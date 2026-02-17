@@ -37,8 +37,10 @@ func shouldIncludeItem(inventoryType entity.InventoryType, itemFrequency entity.
 	case entity.InventoryTypeDaily:
 		return itemFrequency == entity.InventoryFrequencyDaily
 	case entity.InventoryTypeWeekly:
-		return itemFrequency == entity.InventoryFrequencyDaily || itemFrequency == entity.InventoryFrequencyWeekly
-	case entity.InventoryTypeMonthly, entity.InventoryTypeInitial:
+		return itemFrequency == entity.InventoryFrequencyWeekly
+	case entity.InventoryTypeMonthly:
+		return itemFrequency == entity.InventoryFrequencyMonthly
+	case entity.InventoryTypeInitial:
 		return true
 	default:
 		return false

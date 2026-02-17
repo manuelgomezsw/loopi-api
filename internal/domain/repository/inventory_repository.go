@@ -7,7 +7,6 @@ import (
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 )
 
-
 // InventoryRepository defines the interface for inventory data access.
 type InventoryRepository interface {
 	// FindByID retrieves an inventory by its ID.

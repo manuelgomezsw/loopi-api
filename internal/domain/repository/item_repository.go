@@ -18,9 +18,10 @@ type ItemRepository interface {
 	FindActiveByType(ctx context.Context, itemType entity.ItemType) ([]*entity.Item, error)
 
 	// FindActiveByInventoryType retrieves active items based on inventory type.
-	// - daily: items with inventory_frequency = 'daily'
-	// - weekly: items with inventory_frequency IN ('daily', 'weekly')
-	// - monthly: all active items
+	// - daily: active items with inventory_frequency = 'daily'
+	// - weekly: active items with inventory_frequency = 'weekly'
+	// - monthly: active items with inventory_frequency = 'monthly'
+	// - initial: all active items
 	FindActiveByInventoryType(ctx context.Context, inventoryType entity.InventoryType) ([]*entity.Item, error)
 
 	// FindAllWithFilters retrieves items with optional filters and pagination.

@@ -453,4 +453,3 @@ func (r *mysqlInventoryDetailRepository) scanDetails(rows *sql.Rows) ([]*entity.
 
 	return details, nil
 }
-

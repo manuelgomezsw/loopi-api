@@ -217,14 +217,15 @@ func (h *InventoryHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := dtoresponse.InventoryItemsResponse{
-		InventoryID:    inventory.ID,
-		InventoryType:  string(inventory.InventoryType),
-		Schedule:       schedule,
-		Date:           inventory.InventoryDate.Format("2006-01-02"),
-		RequiresSales:  inventory.RequiresSalesAndPurchases(),
-		TotalItems:     len(items),
-		CompletedItems: completedCount,
-		Items:          items,
+		InventoryID:           inventory.ID,
+		InventoryType:         string(inventory.InventoryType),
+		Schedule:              schedule,
+		Date:                  inventory.InventoryDate.Format("2006-01-02"),
+		RequiresSales:         inventory.RequiresSalesAndPurchases(),
+		RequiresPurchasesOnly: inventory.RequiresPurchasesOnly(),
+		TotalItems:            len(items),
+		CompletedItems:        completedCount,
+		Items:                 items,
 	}
 
 	response.RespondJSON(w, http.StatusOK, resp)
@@ -278,14 +279,15 @@ func (h *InventoryHandler) GetDiscrepancies(w http.ResponseWriter, r *http.Reque
 	}
 
 	resp := dtoresponse.DiscrepanciesResponse{
-		InventoryID:      inventory.ID,
-		InventoryType:    string(inventory.InventoryType),
-		Schedule:         schedule,
-		Date:             inventory.InventoryDate.Format("2006-01-02"),
-		RequiresSales:    inventory.RequiresSalesAndPurchases(),
-		TotalItems:       len(items),
-		HasDiscrepancies: len(items) > 0,
-		Items:            items,
+		InventoryID:           inventory.ID,
+		InventoryType:         string(inventory.InventoryType),
+		Schedule:              schedule,
+		Date:                  inventory.InventoryDate.Format("2006-01-02"),
+		RequiresSales:         inventory.RequiresSalesAndPurchases(),
+		RequiresPurchasesOnly: inventory.RequiresPurchasesOnly(),
+		TotalItems:            len(items),
+		HasDiscrepancies:      len(items) > 0,
+		Items:                 items,
 	}
 
 	response.RespondJSON(w, http.StatusOK, resp)
@@ -437,15 +439,16 @@ func (h *InventoryHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := dtoresponse.InventorySummaryResponse{
-		InventoryID:     inventory.ID,
-		InventoryType:   string(inventory.InventoryType),
-		Schedule:        schedule,
-		Date:            inventory.InventoryDate.Format("2006-01-02"),
-		TotalItems:      len(details),
-		ItemsWithIssues: issuesCount,
-		Items:           items,
-		CanComplete:     missingCount == 0,
-		MissingItems:    missingCount,
+		InventoryID:           inventory.ID,
+		InventoryType:         string(inventory.InventoryType),
+		Schedule:              schedule,
+		Date:                  inventory.InventoryDate.Format("2006-01-02"),
+		RequiresPurchasesOnly: inventory.RequiresPurchasesOnly(),
+		TotalItems:            len(details),
+		ItemsWithIssues:       issuesCount,
+		Items:                 items,
+		CanComplete:           missingCount == 0,
+		MissingItems:          missingCount,
 	}
 
 	response.RespondJSON(w, http.StatusOK, resp)

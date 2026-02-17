@@ -73,9 +73,15 @@ func (i *Inventory) RequiresSalesAndPurchases() bool {
 		return false // Initial inventories don't require sales/purchases
 	}
 	if !i.IsDaily() {
-		return true // Weekly and monthly always require sales/purchases
+		return true // Weekly and monthly show purchases entry (sales not recorded)
 	}
 	return i.Schedule != nil && *i.Schedule != ScheduleOpening
+}
+
+// RequiresPurchasesOnly returns true if the inventory records only purchases (no sales).
+// Weekly and monthly inventories do not record sales; the POS handles that.
+func (i *Inventory) RequiresPurchasesOnly() bool {
+	return i.InventoryType == InventoryTypeWeekly || i.InventoryType == InventoryTypeMonthly
 }
 
 // GetScheduleString returns the schedule as a string, or empty if nil.

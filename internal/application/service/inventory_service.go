@@ -300,9 +300,16 @@ func (s *InventoryService) SaveSalesAndPurchases(ctx context.Context, inventoryI
 		return nil, apperrors.New(400, "item not found in this inventory")
 	}
 
+	// Weekly and monthly inventories record only purchases (no sales)
+	unitsToApply := unitsSold
+	if inventory.RequiresPurchasesOnly() {
+		zero := uint16(0)
+		unitsToApply = &zero
+	}
+
 	// Update sales and purchases
 	detail.StockReceived = stockReceived
-	detail.UnitsSold = unitsSold
+	detail.UnitsSold = unitsToApply
 
 	// Recalculate suggested value based on previous + received - sold
 	if detail.SuggestedValue != nil {
@@ -310,9 +317,9 @@ func (s *InventoryService) SaveSalesAndPurchases(ctx context.Context, inventoryI
 		if stockReceived != nil {
 			suggested += *stockReceived
 		}
-		if unitsSold != nil {
-			if suggested >= *unitsSold {
-				suggested -= *unitsSold
+		if unitsToApply != nil && *unitsToApply > 0 {
+			if suggested >= *unitsToApply {
+				suggested -= *unitsToApply
 			} else {
 				suggested = 0
 			}
