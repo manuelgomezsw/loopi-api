@@ -70,9 +70,6 @@ type InventoryDetailRepository interface {
 	// FindByInventoryAndItem retrieves a specific detail by inventory and item.
 	FindByInventoryAndItem(ctx context.Context, inventoryID uint32, itemID uint16) (*entity.InventoryDetail, error)
 
-	// FindRecentDetailsWithInventory returns details from completed inventories in the last N days, with item and inventory (raw data; no discrepancy filter).
-	FindRecentDetailsWithInventory(ctx context.Context, days int, limit int) ([]*entity.InventoryDetail, error)
-
 	// Create creates a new inventory detail.
 	Create(ctx context.Context, detail *entity.InventoryDetail) error
 

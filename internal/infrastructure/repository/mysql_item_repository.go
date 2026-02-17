@@ -23,16 +23,18 @@ func NewMySQLItemRepository(db *sql.DB) repository.ItemRepository {
 // FindByID retrieves an item by its ID.
 func (r *mysqlItemRepository) FindByID(ctx context.Context, id uint16) (*entity.Item, error) {
 	query := `
-		SELECT i.id, i.type, i.name, i.active, i.inventory_frequency, 
-		       i.category_id, i.supplier_id, i.cost, i.created_at, i.updated_at,
-		       c.name as category_name
+		SELECT i.id, i.type, i.name, i.active, i.inventory_frequency,
+		       i.category_id, i.supplier_id, i.cost, i.measurement_unit_id, i.created_at, i.updated_at,
+		       c.name as category_name, mu.code as mu_code, mu.name as mu_name
 		FROM items i
 		LEFT JOIN categories c ON i.category_id = c.id
+		LEFT JOIN measurement_units mu ON i.measurement_unit_id = mu.id
 		WHERE i.id = ?
 	`
 
 	var item entity.Item
 	var categoryName sql.NullString
+	var muCode, muName sql.NullString
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&item.ID,
 		&item.Type,
@@ -42,9 +44,12 @@ func (r *mysqlItemRepository) FindByID(ctx context.Context, id uint16) (*entity.
 		&item.CategoryID,
 		&item.SupplierID,
 		&item.Cost,
+		&item.MeasurementUnitID,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 		&categoryName,
+		&muCode,
+		&muName,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -56,6 +61,9 @@ func (r *mysqlItemRepository) FindByID(ctx context.Context, id uint16) (*entity.
 	if categoryName.Valid {
 		item.Category = &entity.Category{ID: item.CategoryID, Name: categoryName.String}
 	}
+	if muCode.Valid && muName.Valid {
+		item.MeasurementUnit = &entity.MeasurementUnit{ID: item.MeasurementUnitID, Code: muCode.String, Name: muName.String}
+	}
 
 	return &item, nil
 }
@@ -63,31 +71,33 @@ func (r *mysqlItemRepository) FindByID(ctx context.Context, id uint16) (*entity.
 // FindAllActive retrieves all active items ordered by category then name.
 func (r *mysqlItemRepository) FindAllActive(ctx context.Context) ([]*entity.Item, error) {
 	query := `
-		SELECT i.id, i.type, i.name, i.active, i.inventory_frequency, 
-		       i.category_id, i.supplier_id, i.cost, i.created_at, i.updated_at,
-		       c.name as category_name, c.display_order
+		SELECT i.id, i.type, i.name, i.active, i.inventory_frequency,
+		       i.category_id, i.supplier_id, i.cost, i.measurement_unit_id, i.created_at, i.updated_at,
+		       c.name as category_name, c.display_order, mu.code as mu_code, mu.name as mu_name
 		FROM items i
 		LEFT JOIN categories c ON i.category_id = c.id
+		LEFT JOIN measurement_units mu ON i.measurement_unit_id = mu.id
 		WHERE i.active = 1
 		ORDER BY c.display_order ASC, i.name ASC
 	`
 
-	return r.queryItemsWithCategory(ctx, query)
+	return r.queryItemsWithCategoryAndUnit(ctx, query)
 }
 
 // FindActiveByType retrieves all active items of a specific type.
 func (r *mysqlItemRepository) FindActiveByType(ctx context.Context, itemType entity.ItemType) ([]*entity.Item, error) {
 	query := `
-		SELECT i.id, i.type, i.name, i.active, i.inventory_frequency, 
-		       i.category_id, i.supplier_id, i.cost, i.created_at, i.updated_at,
-		       c.name as category_name, c.display_order
+		SELECT i.id, i.type, i.name, i.active, i.inventory_frequency,
+		       i.category_id, i.supplier_id, i.cost, i.measurement_unit_id, i.created_at, i.updated_at,
+		       c.name as category_name, c.display_order, mu.code as mu_code, mu.name as mu_name
 		FROM items i
 		LEFT JOIN categories c ON i.category_id = c.id
+		LEFT JOIN measurement_units mu ON i.measurement_unit_id = mu.id
 		WHERE i.active = 1 AND i.type = ?
 		ORDER BY c.display_order ASC, i.name ASC
 	`
 
-	return r.queryItemsWithCategory(ctx, query, itemType)
+	return r.queryItemsWithCategoryAndUnit(ctx, query, itemType)
 }
 
 // FindActiveByInventoryType retrieves active items based on inventory type.
@@ -107,11 +117,12 @@ func (r *mysqlItemRepository) FindActiveByInventoryType(ctx context.Context, inv
 	}
 
 	query := fmt.Sprintf(`
-		SELECT i.id, i.type, i.name, i.active, i.inventory_frequency, 
-		       i.category_id, i.supplier_id, i.cost, i.created_at, i.updated_at,
-		       c.name as category_name, c.display_order
+		SELECT i.id, i.type, i.name, i.active, i.inventory_frequency,
+		       i.category_id, i.supplier_id, i.cost, i.measurement_unit_id, i.created_at, i.updated_at,
+		       c.name as category_name, c.display_order, mu.code as mu_code, mu.name as mu_name
 		FROM items i
 		LEFT JOIN categories c ON i.category_id = c.id
+		LEFT JOIN measurement_units mu ON i.measurement_unit_id = mu.id
 		WHERE %s
 		ORDER BY c.display_order ASC, i.name ASC
 	`, whereClause)
@@ -127,6 +138,7 @@ func (r *mysqlItemRepository) FindActiveByInventoryType(ctx context.Context, inv
 		var item entity.Item
 		var categoryName sql.NullString
 		var displayOrder sql.NullInt64
+		var muCode, muName sql.NullString
 		if err := rows.Scan(
 			&item.ID,
 			&item.Type,
@@ -136,10 +148,13 @@ func (r *mysqlItemRepository) FindActiveByInventoryType(ctx context.Context, inv
 			&item.CategoryID,
 			&item.SupplierID,
 			&item.Cost,
+			&item.MeasurementUnitID,
 			&item.CreatedAt,
 			&item.UpdatedAt,
 			&categoryName,
 			&displayOrder,
+			&muCode,
+			&muName,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan item: %w", err)
 		}
@@ -149,6 +164,9 @@ func (r *mysqlItemRepository) FindActiveByInventoryType(ctx context.Context, inv
 				Name:         categoryName.String,
 				DisplayOrder: int(displayOrder.Int64),
 			}
+		}
+		if muCode.Valid && muName.Valid {
+			item.MeasurementUnit = &entity.MeasurementUnit{ID: item.MeasurementUnitID, Code: muCode.String, Name: muName.String}
 		}
 		items = append(items, &item)
 	}
@@ -160,8 +178,8 @@ func (r *mysqlItemRepository) FindActiveByInventoryType(ctx context.Context, inv
 	return items, nil
 }
 
-// queryItemsWithCategory is a helper function to execute item queries with category info.
-func (r *mysqlItemRepository) queryItemsWithCategory(ctx context.Context, query string, args ...interface{}) ([]*entity.Item, error) {
+// queryItemsWithCategoryAndUnit is a helper to execute item queries with category and measurement unit info.
+func (r *mysqlItemRepository) queryItemsWithCategoryAndUnit(ctx context.Context, query string, args ...interface{}) ([]*entity.Item, error) {
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query items: %w", err)
@@ -173,6 +191,7 @@ func (r *mysqlItemRepository) queryItemsWithCategory(ctx context.Context, query 
 		var item entity.Item
 		var categoryName sql.NullString
 		var displayOrder sql.NullInt64
+		var muCode, muName sql.NullString
 		if err := rows.Scan(
 			&item.ID,
 			&item.Type,
@@ -182,10 +201,13 @@ func (r *mysqlItemRepository) queryItemsWithCategory(ctx context.Context, query 
 			&item.CategoryID,
 			&item.SupplierID,
 			&item.Cost,
+			&item.MeasurementUnitID,
 			&item.CreatedAt,
 			&item.UpdatedAt,
 			&categoryName,
 			&displayOrder,
+			&muCode,
+			&muName,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan item: %w", err)
 		}
@@ -195,6 +217,9 @@ func (r *mysqlItemRepository) queryItemsWithCategory(ctx context.Context, query 
 				Name:         categoryName.String,
 				DisplayOrder: int(displayOrder.Int64),
 			}
+		}
+		if muCode.Valid && muName.Valid {
+			item.MeasurementUnit = &entity.MeasurementUnit{ID: item.MeasurementUnitID, Code: muCode.String, Name: muName.String}
 		}
 		items = append(items, &item)
 	}
@@ -208,7 +233,7 @@ func (r *mysqlItemRepository) queryItemsWithCategory(ctx context.Context, query 
 
 // FindAllWithFilters retrieves items with optional filters and pagination.
 func (r *mysqlItemRepository) FindAllWithFilters(ctx context.Context, itemType *entity.ItemType, frequency *entity.InventoryFrequency, active *bool, search string, page, pageSize int) ([]*entity.Item, int, error) {
-	baseQuery := " FROM items i LEFT JOIN categories c ON i.category_id = c.id WHERE 1=1"
+	baseQuery := " FROM items i LEFT JOIN categories c ON i.category_id = c.id LEFT JOIN measurement_units mu ON i.measurement_unit_id = mu.id WHERE 1=1"
 	var args []interface{}
 
 	if itemType != nil {
@@ -236,9 +261,9 @@ func (r *mysqlItemRepository) FindAllWithFilters(ctx context.Context, itemType *
 	}
 
 	// Get paginated results
-	selectQuery := `SELECT i.id, i.type, i.name, i.active, i.inventory_frequency, 
-	                       i.category_id, i.supplier_id, i.cost, i.created_at, i.updated_at,
-	                       c.name as category_name` + baseQuery + ` ORDER BY c.display_order, i.name LIMIT ? OFFSET ?`
+	selectQuery := `SELECT i.id, i.type, i.name, i.active, i.inventory_frequency,
+	                       i.category_id, i.supplier_id, i.cost, i.measurement_unit_id, i.created_at, i.updated_at,
+	                       c.name as category_name, mu.code as mu_code, mu.name as mu_name` + baseQuery + ` ORDER BY c.display_order, i.name LIMIT ? OFFSET ?`
 	args = append(args, pageSize, (page-1)*pageSize)
 
 	rows, err := r.db.QueryContext(ctx, selectQuery, args...)
@@ -251,6 +276,7 @@ func (r *mysqlItemRepository) FindAllWithFilters(ctx context.Context, itemType *
 	for rows.Next() {
 		var item entity.Item
 		var categoryName sql.NullString
+		var muCode, muName sql.NullString
 		if err := rows.Scan(
 			&item.ID,
 			&item.Type,
@@ -260,14 +286,20 @@ func (r *mysqlItemRepository) FindAllWithFilters(ctx context.Context, itemType *
 			&item.CategoryID,
 			&item.SupplierID,
 			&item.Cost,
+			&item.MeasurementUnitID,
 			&item.CreatedAt,
 			&item.UpdatedAt,
 			&categoryName,
+			&muCode,
+			&muName,
 		); err != nil {
 			return nil, 0, fmt.Errorf("failed to scan item: %w", err)
 		}
 		if categoryName.Valid {
 			item.Category = &entity.Category{ID: item.CategoryID, Name: categoryName.String}
+		}
+		if muCode.Valid && muName.Valid {
+			item.MeasurementUnit = &entity.MeasurementUnit{ID: item.MeasurementUnitID, Code: muCode.String, Name: muName.String}
 		}
 		items = append(items, &item)
 	}
@@ -278,11 +310,11 @@ func (r *mysqlItemRepository) FindAllWithFilters(ctx context.Context, itemType *
 // Create creates a new item.
 func (r *mysqlItemRepository) Create(ctx context.Context, item *entity.Item) error {
 	query := `
-		INSERT INTO items (type, name, active, inventory_frequency, category_id, supplier_id, cost)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO items (type, name, active, inventory_frequency, category_id, supplier_id, cost, measurement_unit_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	result, err := r.db.ExecContext(ctx, query, item.Type, item.Name, item.Active, item.InventoryFrequency, item.CategoryID, item.SupplierID, item.Cost)
+	result, err := r.db.ExecContext(ctx, query, item.Type, item.Name, item.Active, item.InventoryFrequency, item.CategoryID, item.SupplierID, item.Cost, item.MeasurementUnitID)
 	if err != nil {
 		return fmt.Errorf("failed to create item: %w", err)
 	}
@@ -300,12 +332,12 @@ func (r *mysqlItemRepository) Create(ctx context.Context, item *entity.Item) err
 func (r *mysqlItemRepository) Update(ctx context.Context, item *entity.Item) error {
 	query := `
 		UPDATE items
-		SET type = ?, name = ?, active = ?, inventory_frequency = ?, 
-		    category_id = ?, supplier_id = ?, cost = ?, updated_at = ?
+		SET type = ?, name = ?, active = ?, inventory_frequency = ?,
+		    category_id = ?, supplier_id = ?, cost = ?, measurement_unit_id = ?, updated_at = ?
 		WHERE id = ?
 	`
 
-	_, err := r.db.ExecContext(ctx, query, item.Type, item.Name, item.Active, item.InventoryFrequency, item.CategoryID, item.SupplierID, item.Cost, datetime.Now(), item.ID)
+	_, err := r.db.ExecContext(ctx, query, item.Type, item.Name, item.Active, item.InventoryFrequency, item.CategoryID, item.SupplierID, item.Cost, item.MeasurementUnitID, datetime.Now(), item.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update item: %w", err)
 	}

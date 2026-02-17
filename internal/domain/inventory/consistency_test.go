@@ -13,11 +13,11 @@ import (
 func TestDiscrepancyConsistency(t *testing.T) {
 	// One fixture: details that mix no-discrepancy and discrepancy cases.
 	details := []*entity.InventoryDetail{
-		{ItemID: 1, SuggestedValue: ptrU16(10), RealValue: ptrU16(10)},                                           // no diff
-		{ItemID: 2, SuggestedValue: ptrU16(42), UnitsSold: ptrU16(3), RealValue: ptrU16(39)},                      // expected 39, no diff (regression case)
+		{ItemID: 1, SuggestedValue: ptrU16(10), RealValue: ptrU16(10)},                                                 // no diff
+		{ItemID: 2, SuggestedValue: ptrU16(42), UnitsSold: ptrU16(3), RealValue: ptrU16(39)},                           // expected 39, no diff (regression case)
 		{ItemID: 3, SuggestedValue: ptrU16(20), StockReceived: ptrU16(5), UnitsSold: ptrU16(2), RealValue: ptrU16(22)}, // expected 23, real 22 -> diff -1
-		{ItemID: 4, SuggestedValue: ptrU16(8), RealValue: ptrU16(12)},                                           // expected 8, real 12 -> diff +4
-		{ItemID: 5, SuggestedValue: ptrU16(0), RealValue: ptrU16(0)},                                             // no diff
+		{ItemID: 4, SuggestedValue: ptrU16(8), RealValue: ptrU16(12)},                                                  // expected 8, real 12 -> diff +4
+		{ItemID: 5, SuggestedValue: ptrU16(0), RealValue: ptrU16(0)},                                                   // no diff
 	}
 
 	// Compute as GetDiscrepancies / CompleteInventory / dashboard would: ExpectedAtEnd + HasDiscrepancy + Difference.
@@ -77,8 +77,8 @@ func TestExpectedAtEndVsExpectedForAdminConsistency(t *testing.T) {
 		Shrinkage:      ptrU16(1),
 		RealValue:      ptrU16(9),
 	}
-	expectedAtEnd := ExpectedAtEnd(d)       // 10 (no shrinkage in employee flow)
-	expectedAdmin := ExpectedForAdmin(d)   // 9
+	expectedAtEnd := ExpectedAtEnd(d)    // 10 (no shrinkage in employee flow)
+	expectedAdmin := ExpectedForAdmin(d) // 9
 
 	if expectedAtEnd != 10 || expectedAdmin != 9 {
 		t.Errorf("ExpectedAtEnd = %d, ExpectedForAdmin = %d; want 10, 9", expectedAtEnd, expectedAdmin)

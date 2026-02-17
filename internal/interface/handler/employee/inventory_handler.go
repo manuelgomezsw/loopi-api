@@ -1,4 +1,4 @@
-package handler
+package employee
 
 import (
 	"encoding/json"
@@ -7,25 +7,26 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/manuelgomezsw/loopi-api/internal/application/dto/request"
-	"github.com/manuelgomezsw/loopi-api/internal/application/dto/response"
+	dtoresponse "github.com/manuelgomezsw/loopi-api/internal/application/dto/response"
 	"github.com/manuelgomezsw/loopi-api/internal/application/service"
 	"github.com/manuelgomezsw/loopi-api/internal/interface/middleware"
+	"github.com/manuelgomezsw/loopi-api/internal/interface/response"
 	apperrors "github.com/manuelgomezsw/loopi-api/pkg/errors"
 )
 
-// InventoryHandler handles inventory endpoints.
+// InventoryHandler handles employee inventory endpoints (my inventories flow).
 type InventoryHandler struct {
-	inventoryService *service.InventoryService
+	employeeService *service.EmployeeService
 }
 
-// NewInventoryHandler creates a new inventory handler.
-func NewInventoryHandler(inventoryService *service.InventoryService) *InventoryHandler {
-	return &InventoryHandler{inventoryService: inventoryService}
+// NewInventoryHandler creates a new employee inventory handler.
+func NewInventoryHandler(employeeService *service.EmployeeService) *InventoryHandler {
+	return &InventoryHandler{employeeService: employeeService}
 }
 
 // GetSuggestedSchedule handles GET /api/inventories/suggested-schedule.
 func (h *InventoryHandler) GetSuggestedSchedule(w http.ResponseWriter, r *http.Request) {
-	suggested := h.inventoryService.GetSuggestedSchedule()
+	suggested := h.employeeService.GetSuggestedSchedule()
 
 	var schedule *string
 	if suggested.Schedule != nil {
@@ -33,25 +34,25 @@ func (h *InventoryHandler) GetSuggestedSchedule(w http.ResponseWriter, r *http.R
 		schedule = &s
 	}
 
-	resp := response.SuggestedScheduleResponse{
+	resp := dtoresponse.SuggestedScheduleResponse{
 		InventoryType: string(suggested.InventoryType),
 		Schedule:      schedule,
 		Date:          suggested.Date.Format("2006-01-02"),
 	}
 
-	respondJSON(w, http.StatusOK, resp)
+	response.RespondJSON(w, http.StatusOK, resp)
 }
 
 // GetLatest handles GET /api/inventories/latest.
 func (h *InventoryHandler) GetLatest(w http.ResponseWriter, r *http.Request) {
-	inventory, err := h.inventoryService.GetLatestCompleted(r.Context())
+	inventory, err := h.employeeService.GetLatestCompleted(r.Context())
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to get latest inventory")
+		response.RespondError(w, http.StatusInternalServerError, "failed to get latest inventory")
 		return
 	}
 
 	if inventory == nil {
-		respondJSON(w, http.StatusOK, map[string]interface{}{"inventory": nil})
+		response.RespondJSON(w, http.StatusOK, map[string]interface{}{"inventory": nil})
 		return
 	}
 
@@ -61,7 +62,7 @@ func (h *InventoryHandler) GetLatest(w http.ResponseWriter, r *http.Request) {
 		schedule = &s
 	}
 
-	resp := response.InventoryResponse{
+	resp := dtoresponse.InventoryResponse{
 		ID:            inventory.ID,
 		InventoryDate: inventory.InventoryDate.Format("2006-01-02"),
 		InventoryType: string(inventory.InventoryType),
@@ -72,24 +73,24 @@ func (h *InventoryHandler) GetLatest(w http.ResponseWriter, r *http.Request) {
 		CompletedAt:   inventory.CompletedAt,
 	}
 
-	respondJSON(w, http.StatusOK, map[string]interface{}{"inventory": resp})
+	response.RespondJSON(w, http.StatusOK, map[string]interface{}{"inventory": resp})
 }
 
 // GetInProgress handles GET /api/inventories/in-progress.
 func (h *InventoryHandler) GetInProgress(w http.ResponseWriter, r *http.Request) {
 	employeeID, ok := middleware.GetEmployeeID(r.Context())
 	if !ok {
-		respondError(w, http.StatusUnauthorized, "unauthorized")
+		response.RespondError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	inventories, err := h.inventoryService.GetInProgress(r.Context(), employeeID)
+	inventories, err := h.employeeService.GetInProgress(r.Context(), employeeID)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to get in-progress inventories")
+		response.RespondError(w, http.StatusInternalServerError, "failed to get in-progress inventories")
 		return
 	}
 
-	items := make([]response.InProgressInventoryResponse, 0, len(inventories))
+	items := make([]dtoresponse.InProgressInventoryResponse, 0, len(inventories))
 	for _, inv := range inventories {
 		var schedule *string
 		if inv.Schedule != nil {
@@ -97,7 +98,7 @@ func (h *InventoryHandler) GetInProgress(w http.ResponseWriter, r *http.Request)
 			schedule = &s
 		}
 
-		items = append(items, response.InProgressInventoryResponse{
+		items = append(items, dtoresponse.InProgressInventoryResponse{
 			ID:            inv.ID,
 			InventoryDate: inv.InventoryDate.Format("2006-01-02"),
 			InventoryType: string(inv.InventoryType),
@@ -106,34 +107,34 @@ func (h *InventoryHandler) GetInProgress(w http.ResponseWriter, r *http.Request)
 		})
 	}
 
-	resp := response.InProgressInventoriesResponse{
+	resp := dtoresponse.InProgressInventoriesResponse{
 		Inventories: items,
 		Count:       len(items),
 	}
 
-	respondJSON(w, http.StatusOK, resp)
+	response.RespondJSON(w, http.StatusOK, resp)
 }
 
 // Create handles POST /api/inventories.
 func (h *InventoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req request.CreateInventoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid request body")
+		response.RespondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if err := req.Validate(); err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
+		response.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	employeeID, ok := middleware.GetEmployeeID(r.Context())
 	if !ok {
-		respondError(w, http.StatusUnauthorized, "unauthorized")
+		response.RespondError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	inventory, err := h.inventoryService.CreateInventory(
+	inventory, err := h.employeeService.CreateInventory(
 		r.Context(),
 		req.GetInventoryType(),
 		req.GetSchedule(),
@@ -142,10 +143,10 @@ func (h *InventoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		if appErr, ok := err.(*apperrors.AppError); ok {
-			respondError(w, appErr.Code, appErr.Message)
+			response.RespondError(w, appErr.Code, appErr.Message)
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "failed to create inventory")
+		response.RespondError(w, http.StatusInternalServerError, "failed to create inventory")
 		return
 	}
 
@@ -155,7 +156,7 @@ func (h *InventoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		schedule = &s
 	}
 
-	resp := response.InventoryResponse{
+	resp := dtoresponse.InventoryResponse{
 		ID:            inventory.ID,
 		InventoryDate: inventory.InventoryDate.Format("2006-01-02"),
 		InventoryType: string(inventory.InventoryType),
@@ -165,32 +166,31 @@ func (h *InventoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		StartedAt:     inventory.StartedAt,
 	}
 
-	respondJSON(w, http.StatusCreated, resp)
+	response.RespondJSON(w, http.StatusCreated, resp)
 }
 
 // GetItems handles GET /api/inventories/:id/items.
 func (h *InventoryHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 	inventoryID, err := h.getInventoryID(r)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid inventory id")
+		response.RespondError(w, http.StatusBadRequest, "invalid inventory id")
 		return
 	}
 
-	inventory, details, err := h.inventoryService.GetInventoryItems(r.Context(), inventoryID)
+	inventory, details, err := h.employeeService.GetInventoryItems(r.Context(), inventoryID)
 	if err != nil {
 		if err == apperrors.ErrNotFound {
-			respondError(w, http.StatusNotFound, "inventory not found")
+			response.RespondError(w, http.StatusNotFound, "inventory not found")
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "failed to get inventory items")
+		response.RespondError(w, http.StatusInternalServerError, "failed to get inventory items")
 		return
 	}
 
-	// Build response
-	items := make([]response.InventoryItemResponse, 0, len(details))
+	items := make([]dtoresponse.InventoryItemResponse, 0, len(details))
 	completedCount := 0
 	for _, d := range details {
-		item := response.InventoryItemResponse{
+		item := dtoresponse.InventoryItemResponse{
 			ItemID:         d.ItemID,
 			SuggestedValue: d.SuggestedValue,
 			RealValue:      d.RealValue,
@@ -216,7 +216,7 @@ func (h *InventoryHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 		schedule = &s
 	}
 
-	resp := response.InventoryItemsResponse{
+	resp := dtoresponse.InventoryItemsResponse{
 		InventoryID:    inventory.ID,
 		InventoryType:  string(inventory.InventoryType),
 		Schedule:       schedule,
@@ -227,38 +227,37 @@ func (h *InventoryHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 		Items:          items,
 	}
 
-	respondJSON(w, http.StatusOK, resp)
+	response.RespondJSON(w, http.StatusOK, resp)
 }
 
 // GetDiscrepancies handles GET /api/inventories/:id/discrepancies.
 func (h *InventoryHandler) GetDiscrepancies(w http.ResponseWriter, r *http.Request) {
 	inventoryID, err := h.getInventoryID(r)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid inventory id")
+		response.RespondError(w, http.StatusBadRequest, "invalid inventory id")
 		return
 	}
 
-	inventory, details, err := h.inventoryService.GetDiscrepancies(r.Context(), inventoryID)
+	inventory, details, err := h.employeeService.GetDiscrepancies(r.Context(), inventoryID)
 	if err != nil {
 		if err == apperrors.ErrNotFound {
-			respondError(w, http.StatusNotFound, "inventory not found")
+			response.RespondError(w, http.StatusNotFound, "inventory not found")
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "failed to get discrepancies")
+		response.RespondError(w, http.StatusInternalServerError, "failed to get discrepancies")
 		return
 	}
 
-	// Build response (difference = real - expected_at_end)
-	items := make([]response.DiscrepancyItemResponse, 0, len(details))
+	items := make([]dtoresponse.DiscrepancyItemResponse, 0, len(details))
 	for _, d := range details {
 		var suggestedVal uint16
 		if d.SuggestedValue != nil {
 			suggestedVal = *d.SuggestedValue
 		}
-		expectedAtEnd := h.inventoryService.ComputeExpectedAtEnd(d)
+		expectedAtEnd := h.employeeService.ComputeExpectedAtEnd(d)
 		diff := int16(*d.RealValue) - int16(expectedAtEnd)
 
-		item := response.DiscrepancyItemResponse{
+		item := dtoresponse.DiscrepancyItemResponse{
 			ItemID:         d.ItemID,
 			SuggestedValue: suggestedVal,
 			RealValue:      *d.RealValue,
@@ -278,7 +277,7 @@ func (h *InventoryHandler) GetDiscrepancies(w http.ResponseWriter, r *http.Reque
 		schedule = &s
 	}
 
-	resp := response.DiscrepanciesResponse{
+	resp := dtoresponse.DiscrepanciesResponse{
 		InventoryID:      inventory.ID,
 		InventoryType:    string(inventory.InventoryType),
 		Schedule:         schedule,
@@ -289,29 +288,29 @@ func (h *InventoryHandler) GetDiscrepancies(w http.ResponseWriter, r *http.Reque
 		Items:            items,
 	}
 
-	respondJSON(w, http.StatusOK, resp)
+	response.RespondJSON(w, http.StatusOK, resp)
 }
 
-// SaveDetail handles POST /api/inventories/:id/details (physical count only).
+// SaveDetail handles POST /api/inventories/:id/details.
 func (h *InventoryHandler) SaveDetail(w http.ResponseWriter, r *http.Request) {
 	inventoryID, err := h.getInventoryID(r)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid inventory id")
+		response.RespondError(w, http.StatusBadRequest, "invalid inventory id")
 		return
 	}
 
 	var req request.SaveInventoryDetailRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid request body")
+		response.RespondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if err := req.Validate(); err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
+		response.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	detail, err := h.inventoryService.SaveInventoryDetail(
+	detail, err := h.employeeService.SaveInventoryDetail(
 		r.Context(),
 		inventoryID,
 		req.ItemID,
@@ -319,41 +318,41 @@ func (h *InventoryHandler) SaveDetail(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		if appErr, ok := err.(*apperrors.AppError); ok {
-			respondError(w, appErr.Code, appErr.Message)
+			response.RespondError(w, appErr.Code, appErr.Message)
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "failed to save detail")
+		response.RespondError(w, http.StatusInternalServerError, "failed to save detail")
 		return
 	}
 
-	resp := response.SaveDetailResponse{
+	resp := dtoresponse.SaveDetailResponse{
 		Saved:          true,
 		SuggestedValue: detail.SuggestedValue,
 	}
 
-	respondJSON(w, http.StatusOK, resp)
+	response.RespondJSON(w, http.StatusOK, resp)
 }
 
-// SaveSales handles POST /api/inventories/:id/sales (sales and purchases).
+// SaveSales handles POST /api/inventories/:id/sales.
 func (h *InventoryHandler) SaveSales(w http.ResponseWriter, r *http.Request) {
 	inventoryID, err := h.getInventoryID(r)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid inventory id")
+		response.RespondError(w, http.StatusBadRequest, "invalid inventory id")
 		return
 	}
 
 	var req request.SaveSalesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid request body")
+		response.RespondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if err := req.Validate(); err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
+		response.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	detail, err := h.inventoryService.SaveSalesAndPurchases(
+	detail, err := h.employeeService.SaveSalesAndPurchases(
 		r.Context(),
 		inventoryID,
 		req.ItemID,
@@ -362,41 +361,40 @@ func (h *InventoryHandler) SaveSales(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		if appErr, ok := err.(*apperrors.AppError); ok {
-			respondError(w, appErr.Code, appErr.Message)
+			response.RespondError(w, appErr.Code, appErr.Message)
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "failed to save sales")
+		response.RespondError(w, http.StatusInternalServerError, "failed to save sales")
 		return
 	}
 
-	resp := response.SaveDetailResponse{
+	resp := dtoresponse.SaveDetailResponse{
 		Saved:          true,
 		SuggestedValue: detail.SuggestedValue,
 	}
 
-	respondJSON(w, http.StatusOK, resp)
+	response.RespondJSON(w, http.StatusOK, resp)
 }
 
 // GetSummary handles GET /api/inventories/:id/summary.
 func (h *InventoryHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 	inventoryID, err := h.getInventoryID(r)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid inventory id")
+		response.RespondError(w, http.StatusBadRequest, "invalid inventory id")
 		return
 	}
 
-	inventory, details, err := h.inventoryService.GetInventorySummary(r.Context(), inventoryID)
+	inventory, details, err := h.employeeService.GetInventorySummary(r.Context(), inventoryID)
 	if err != nil {
 		if err == apperrors.ErrNotFound {
-			respondError(w, http.StatusNotFound, "inventory not found")
+			response.RespondError(w, http.StatusNotFound, "inventory not found")
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "failed to get inventory summary")
+		response.RespondError(w, http.StatusInternalServerError, "failed to get inventory summary")
 		return
 	}
 
-	// Build response
-	items := make([]response.InventorySummaryItem, 0, len(details))
+	items := make([]dtoresponse.InventorySummaryItem, 0, len(details))
 	issuesCount := 0
 	missingCount := 0
 
@@ -410,11 +408,11 @@ func (h *InventoryHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 		if d.SuggestedValue != nil {
 			suggestedVal = *d.SuggestedValue
 		}
-		expectedAtEnd := h.inventoryService.ComputeExpectedAtEnd(d)
+		expectedAtEnd := h.employeeService.ComputeExpectedAtEnd(d)
 		diff := int16(*d.RealValue) - int16(expectedAtEnd)
-		hasDisc := h.inventoryService.HasDiscrepancyFromExpectedEnd(d)
+		hasDisc := h.employeeService.HasDiscrepancyFromExpectedEnd(d)
 
-		item := response.InventorySummaryItem{
+		item := dtoresponse.InventorySummaryItem{
 			ItemID:         d.ItemID,
 			SuggestedValue: suggestedVal,
 			RealValue:      *d.RealValue,
@@ -438,7 +436,7 @@ func (h *InventoryHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 		schedule = &s
 	}
 
-	resp := response.InventorySummaryResponse{
+	resp := dtoresponse.InventorySummaryResponse{
 		InventoryID:     inventory.ID,
 		InventoryType:   string(inventory.InventoryType),
 		Schedule:        schedule,
@@ -450,36 +448,35 @@ func (h *InventoryHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 		MissingItems:    missingCount,
 	}
 
-	respondJSON(w, http.StatusOK, resp)
+	response.RespondJSON(w, http.StatusOK, resp)
 }
 
 // Complete handles POST /api/inventories/:id/complete.
 func (h *InventoryHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	inventoryID, err := h.getInventoryID(r)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid inventory id")
+		response.RespondError(w, http.StatusBadRequest, "invalid inventory id")
 		return
 	}
 
-	issuesCreated, err := h.inventoryService.CompleteInventory(r.Context(), inventoryID)
+	issuesCreated, err := h.employeeService.CompleteInventory(r.Context(), inventoryID)
 	if err != nil {
 		if appErr, ok := err.(*apperrors.AppError); ok {
-			respondError(w, appErr.Code, appErr.Message)
+			response.RespondError(w, appErr.Code, appErr.Message)
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "failed to complete inventory")
+		response.RespondError(w, http.StatusInternalServerError, "failed to complete inventory")
 		return
 	}
 
-	resp := response.CompleteInventoryResponse{
+	resp := dtoresponse.CompleteInventoryResponse{
 		Completed:     true,
 		IssuesCreated: issuesCreated,
 	}
 
-	respondJSON(w, http.StatusOK, resp)
+	response.RespondJSON(w, http.StatusOK, resp)
 }
 
-// getInventoryID extracts the inventory ID from the URL.
 func (h *InventoryHandler) getInventoryID(r *http.Request) (uint32, error) {
 	idStr := chi.URLParam(r, "inventoryID")
 	id, err := strconv.ParseUint(idStr, 10, 32)

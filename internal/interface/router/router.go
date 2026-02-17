@@ -11,7 +11,9 @@ import (
 	"github.com/manuelgomezsw/loopi-api/internal/domain/inventory"
 	"github.com/manuelgomezsw/loopi-api/internal/infrastructure/auth"
 	"github.com/manuelgomezsw/loopi-api/internal/infrastructure/repository"
-	"github.com/manuelgomezsw/loopi-api/internal/interface/handler"
+	"github.com/manuelgomezsw/loopi-api/internal/interface/handler/admin"
+	authhandler "github.com/manuelgomezsw/loopi-api/internal/interface/handler/auth"
+	"github.com/manuelgomezsw/loopi-api/internal/interface/handler/employee"
 	"github.com/manuelgomezsw/loopi-api/internal/interface/middleware"
 	"github.com/manuelgomezsw/loopi-api/pkg/config"
 )
@@ -47,6 +49,7 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 	// Initialize repositories
 	employeeRepo := repository.NewMySQLEmployeeRepository(db)
 	itemRepo := repository.NewMySQLItemRepository(db)
+	measurementUnitRepo := repository.NewMySQLMeasurementUnitRepository(db)
 	inventoryRepo := repository.NewMySQLInventoryRepository(db)
 	inventoryDetailRepo := repository.NewMySQLInventoryDetailRepository(db)
 	categoryRepo := repository.NewMySQLCategoryRepository(db)
@@ -62,20 +65,27 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 		itemRepo,
 		inventoryEnricher,
 	)
+	employeeService := service.NewEmployeeService(inventoryService)
 	adminService := service.NewAdminService(
 		inventoryRepo,
 		inventoryDetailRepo,
 		employeeRepo,
 		itemRepo,
+		measurementUnitRepo,
 		categoryRepo,
 		supplierRepo,
 		inventoryEnricher,
 	)
 
-	// Initialize handlers
-	authHandler := handler.NewAuthHandler(authService)
-	inventoryHandler := handler.NewInventoryHandler(inventoryService)
-	adminHandler := handler.NewAdminHandler(adminService)
+	// Initialize handlers: auth, employee (inventory), admin (per domain)
+	authHandler := authhandler.NewHandler(authService)
+	employeeInventoryHandler := employee.NewInventoryHandler(employeeService)
+	adminDashboardHandler := admin.NewDashboardHandler(adminService.Dashboard())
+	adminInventoryHandler := admin.NewInventoryHandler(adminService.Inventory())
+	adminItemHandler := admin.NewItemHandler(adminService.Item())
+	adminEmployeeHandler := admin.NewEmployeeHandler(adminService.Employee())
+	adminCategoryHandler := admin.NewCategoryHandler(adminService.Category())
+	adminSupplierHandler := admin.NewSupplierHandler(adminService.Supplier())
 
 	// Health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -95,25 +105,25 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(jwtManager))
 
-			// Employees routes
+			// Employees routes (session)
 			r.Route("/employees", func(r chi.Router) {
 				r.Get("/me", authHandler.GetMe)
 			})
 
-			// Inventories routes
+			// Employee inventories (operativo)
 			r.Route("/inventories", func(r chi.Router) {
-				r.Get("/latest", inventoryHandler.GetLatest)
-				r.Get("/in-progress", inventoryHandler.GetInProgress)
-				r.Get("/suggested-schedule", inventoryHandler.GetSuggestedSchedule)
-				r.Post("/", inventoryHandler.Create)
+				r.Get("/latest", employeeInventoryHandler.GetLatest)
+				r.Get("/in-progress", employeeInventoryHandler.GetInProgress)
+				r.Get("/suggested-schedule", employeeInventoryHandler.GetSuggestedSchedule)
+				r.Post("/", employeeInventoryHandler.Create)
 
 				r.Route("/{inventoryID}", func(r chi.Router) {
-					r.Get("/items", inventoryHandler.GetItems)
-					r.Post("/details", inventoryHandler.SaveDetail)
-					r.Get("/discrepancies", inventoryHandler.GetDiscrepancies)
-					r.Post("/sales", inventoryHandler.SaveSales)
-					r.Get("/summary", inventoryHandler.GetSummary)
-					r.Post("/complete", inventoryHandler.Complete)
+					r.Get("/items", employeeInventoryHandler.GetItems)
+					r.Post("/details", employeeInventoryHandler.SaveDetail)
+					r.Get("/discrepancies", employeeInventoryHandler.GetDiscrepancies)
+					r.Post("/sales", employeeInventoryHandler.SaveSales)
+					r.Get("/summary", employeeInventoryHandler.GetSummary)
+					r.Post("/complete", employeeInventoryHandler.Complete)
 				})
 			})
 
@@ -121,56 +131,52 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 			r.Route("/admin", func(r chi.Router) {
 				r.Use(middleware.AdminOnly)
 
-				// Dashboard
-				r.Get("/dashboard", adminHandler.GetDashboard)
+				r.Get("/dashboard", adminDashboardHandler.GetDashboard)
 
-				// Admin inventories management
 				r.Route("/inventories", func(r chi.Router) {
-					r.Get("/", adminHandler.ListInventories)
-					r.Get("/active-count", adminHandler.GetActiveInventoriesCount)
-					r.Post("/initial", adminHandler.CreateInitialInventory)
-					r.Get("/{inventoryID}", adminHandler.GetInventoryDetail)
-					r.Put("/{inventoryID}/details/{detailID}", adminHandler.UpdateInventoryDetail)
+					r.Get("/", adminInventoryHandler.ListInventories)
+					r.Get("/active-count", adminInventoryHandler.GetActiveInventoriesCount)
+					r.Post("/initial", adminInventoryHandler.CreateInitialInventory)
+					r.Get("/{inventoryID}", adminInventoryHandler.GetInventoryDetail)
+					r.Put("/{inventoryID}/details/{detailID}", adminInventoryHandler.UpdateInventoryDetail)
 				})
 
-				// Admin items management
+				r.Get("/measurement-units", adminItemHandler.ListMeasurementUnits)
+
 				r.Route("/items", func(r chi.Router) {
-					r.Get("/", adminHandler.ListItems)
-					r.Post("/", adminHandler.CreateItem)
-					r.Get("/{itemID}", adminHandler.GetItem)
-					r.Put("/{itemID}", adminHandler.UpdateItem)
-					r.Patch("/{itemID}/status", adminHandler.UpdateItemStatus)
+					r.Get("/", adminItemHandler.ListItems)
+					r.Post("/", adminItemHandler.CreateItem)
+					r.Get("/{itemID}", adminItemHandler.GetItem)
+					r.Put("/{itemID}", adminItemHandler.UpdateItem)
+					r.Patch("/{itemID}/status", adminItemHandler.UpdateItemStatus)
 				})
 
-				// Admin employees management
 				r.Route("/employees", func(r chi.Router) {
-					r.Get("/", adminHandler.ListEmployees)
-					r.Get("/active", adminHandler.ListAllActiveEmployees)
-					r.Post("/", adminHandler.CreateEmployee)
-					r.Get("/{employeeID}", adminHandler.GetEmployee)
-					r.Put("/{employeeID}", adminHandler.UpdateEmployee)
-					r.Patch("/{employeeID}/status", adminHandler.UpdateEmployeeStatus)
-					r.Post("/{employeeID}/reset-password", adminHandler.ResetEmployeePassword)
+					r.Get("/", adminEmployeeHandler.ListEmployees)
+					r.Get("/active", adminEmployeeHandler.ListAllActiveEmployees)
+					r.Post("/", adminEmployeeHandler.CreateEmployee)
+					r.Get("/{employeeID}", adminEmployeeHandler.GetEmployee)
+					r.Put("/{employeeID}", adminEmployeeHandler.UpdateEmployee)
+					r.Patch("/{employeeID}/status", adminEmployeeHandler.UpdateEmployeeStatus)
+					r.Post("/{employeeID}/reset-password", adminEmployeeHandler.ResetEmployeePassword)
 				})
 
-				// Admin categories management
 				r.Route("/categories", func(r chi.Router) {
-					r.Get("/", adminHandler.ListCategories)
-					r.Post("/", adminHandler.CreateCategory)
-					r.Post("/reorder", adminHandler.ReorderCategories)
-					r.Get("/{categoryID}", adminHandler.GetCategory)
-					r.Put("/{categoryID}", adminHandler.UpdateCategory)
-					r.Patch("/{categoryID}/status", adminHandler.UpdateCategoryStatus)
+					r.Get("/", adminCategoryHandler.ListCategories)
+					r.Post("/", adminCategoryHandler.CreateCategory)
+					r.Post("/reorder", adminCategoryHandler.ReorderCategories)
+					r.Get("/{categoryID}", adminCategoryHandler.GetCategory)
+					r.Put("/{categoryID}", adminCategoryHandler.UpdateCategory)
+					r.Patch("/{categoryID}/status", adminCategoryHandler.UpdateCategoryStatus)
 				})
 
-				// Admin suppliers management
 				r.Route("/suppliers", func(r chi.Router) {
-					r.Get("/", adminHandler.ListSuppliers)
-					r.Get("/active", adminHandler.ListAllActiveSuppliers)
-					r.Post("/", adminHandler.CreateSupplier)
-					r.Get("/{supplierID}", adminHandler.GetSupplier)
-					r.Put("/{supplierID}", adminHandler.UpdateSupplier)
-					r.Patch("/{supplierID}/status", adminHandler.UpdateSupplierStatus)
+					r.Get("/", adminSupplierHandler.ListSuppliers)
+					r.Get("/active", adminSupplierHandler.ListAllActiveSuppliers)
+					r.Post("/", adminSupplierHandler.CreateSupplier)
+					r.Get("/{supplierID}", adminSupplierHandler.GetSupplier)
+					r.Put("/{supplierID}", adminSupplierHandler.UpdateSupplier)
+					r.Patch("/{supplierID}/status", adminSupplierHandler.UpdateSupplierStatus)
 				})
 			})
 		})

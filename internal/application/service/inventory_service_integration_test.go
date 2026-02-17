@@ -13,7 +13,7 @@ import (
 
 // fake inventory repo for GetDiscrepancies / CompleteInventory tests
 type fakeInvRepoForDiscrepancy struct {
-	inv    *entity.Inventory
+	inv            *entity.Inventory
 	completeCalled bool
 }
 
@@ -86,9 +86,6 @@ func (f *fakeDetailRepoForDiscrepancy) FindByInventoryIDWithItems(ctx context.Co
 func (f *fakeDetailRepoForDiscrepancy) FindByInventoryAndItem(ctx context.Context, inventoryID uint32, itemID uint16) (*entity.InventoryDetail, error) {
 	return nil, nil
 }
-func (f *fakeDetailRepoForDiscrepancy) FindRecentDetailsWithInventory(ctx context.Context, days int, limit int) ([]*entity.InventoryDetail, error) {
-	return nil, nil
-}
 func (f *fakeDetailRepoForDiscrepancy) Create(ctx context.Context, detail *entity.InventoryDetail) error {
 	return nil
 }
@@ -105,17 +102,19 @@ func (f *fakeDetailRepoForDiscrepancy) CreateBatch(ctx context.Context, details 
 // minimal item repo for service constructor
 type fakeItemRepo struct{}
 
-func (fakeItemRepo) FindByID(ctx context.Context, id uint16) (*entity.Item, error)                    { return nil, nil }
-func (fakeItemRepo) FindAllActive(ctx context.Context) ([]*entity.Item, error)                          { return nil, nil }
-func (fakeItemRepo) FindActiveByType(ctx context.Context, itemType entity.ItemType) ([]*entity.Item, error) { return nil, nil }
+func (fakeItemRepo) FindByID(ctx context.Context, id uint16) (*entity.Item, error) { return nil, nil }
+func (fakeItemRepo) FindAllActive(ctx context.Context) ([]*entity.Item, error)     { return nil, nil }
+func (fakeItemRepo) FindActiveByType(ctx context.Context, itemType entity.ItemType) ([]*entity.Item, error) {
+	return nil, nil
+}
 func (fakeItemRepo) FindActiveByInventoryType(ctx context.Context, inventoryType entity.InventoryType) ([]*entity.Item, error) {
 	return nil, nil
 }
 func (fakeItemRepo) FindAllWithFilters(ctx context.Context, itemType *entity.ItemType, frequency *entity.InventoryFrequency, active *bool, search string, page, pageSize int) ([]*entity.Item, int, error) {
 	return nil, 0, nil
 }
-func (fakeItemRepo) Create(ctx context.Context, item *entity.Item) error   { return nil }
-func (fakeItemRepo) Update(ctx context.Context, item *entity.Item) error   { return nil }
+func (fakeItemRepo) Create(ctx context.Context, item *entity.Item) error            { return nil }
+func (fakeItemRepo) Update(ctx context.Context, item *entity.Item) error            { return nil }
 func (fakeItemRepo) UpdateStatus(ctx context.Context, id uint16, active bool) error { return nil }
 
 var _ repository.InventoryRepository = (*fakeInvRepoForDiscrepancy)(nil)

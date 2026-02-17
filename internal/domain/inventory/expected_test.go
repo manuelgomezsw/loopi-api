@@ -8,18 +8,18 @@ import (
 
 func TestExpectedAtEnd(t *testing.T) {
 	tests := []struct {
-		name           string
-		d              *entity.InventoryDetail
-		wantExpected   uint16
+		name         string
+		d            *entity.InventoryDetail
+		wantExpected uint16
 	}{
 		{
-			name: "all nil",
-			d:    &entity.InventoryDetail{},
+			name:         "all nil",
+			d:            &entity.InventoryDetail{},
 			wantExpected: 0,
 		},
 		{
-			name: "suggested only",
-			d:    &entity.InventoryDetail{SuggestedValue: ptrU16(10)},
+			name:         "suggested only",
+			d:            &entity.InventoryDetail{SuggestedValue: ptrU16(10)},
 			wantExpected: 10,
 		},
 		{
