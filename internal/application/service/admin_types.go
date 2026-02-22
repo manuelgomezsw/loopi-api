@@ -1,14 +1,10 @@
 package service
 
 import (
-	"errors"
 	"time"
 
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 )
-
-// ErrShrinkageOnlyWhenCompleted is returned when trying to edit shrinkage on a non-completed inventory.
-var ErrShrinkageOnlyWhenCompleted = errors.New("shrinkage can only be edited on completed inventories")
 
 // --- Dashboard ---
 

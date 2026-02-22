@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
@@ -63,6 +64,37 @@ func (r *mysqlInventoryDetailRepository) FindByID(ctx context.Context, id uint32
 	}
 
 	return &d, nil
+}
+
+// FindByInventoryIDs retrieves all details for multiple inventories in a single query.
+// Results are ordered by inventory_id, item_id.
+func (r *mysqlInventoryDetailRepository) FindByInventoryIDs(ctx context.Context, ids []uint32) ([]*entity.InventoryDetail, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+
+	query := fmt.Sprintf(`
+		SELECT id, inventory_id, item_id, suggested_value, real_value, stock_received, units_sold, shrinkage, created_at, updated_at
+		FROM inventory_details
+		WHERE inventory_id IN (%s)
+		ORDER BY inventory_id, item_id
+	`, placeholders)
+
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find inventory details by ids: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanDetails(rows)
 }
 
 // FindByInventoryID retrieves all details for an inventory.

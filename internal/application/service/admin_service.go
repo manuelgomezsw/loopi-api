@@ -62,8 +62,8 @@ func (s *AdminService) GetInventoryDetail(ctx context.Context, inventoryID uint3
 }
 
 // UpdateInventoryDetail delegates to AdminInventoryService.
-func (s *AdminService) UpdateInventoryDetail(ctx context.Context, inventoryID uint32, detailID uint32, realValue, stockReceived, unitsSold, shrinkage *uint16) error {
-	return s.inventory.UpdateInventoryDetail(ctx, inventoryID, detailID, realValue, stockReceived, unitsSold, shrinkage)
+func (s *AdminService) UpdateInventoryDetail(ctx context.Context, inventoryID uint32, detailID uint32, suggestedValue, realValue, stockReceived, unitsSold, shrinkage *uint16) error {
+	return s.inventory.UpdateInventoryDetail(ctx, inventoryID, detailID, suggestedValue, realValue, stockReceived, unitsSold, shrinkage)
 }
 
 // GetActiveInventoriesCount delegates to AdminInventoryService.

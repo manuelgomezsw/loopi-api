@@ -63,6 +63,9 @@ type InventoryDetailRepository interface {
 	// FindByInventoryID retrieves all details for an inventory.
 	FindByInventoryID(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error)
 
+	// FindByInventoryIDs retrieves all details for multiple inventories in a single query.
+	FindByInventoryIDs(ctx context.Context, ids []uint32) ([]*entity.InventoryDetail, error)
+
 	// FindByInventoryIDWithItems retrieves all details with item information.
 	FindByInventoryIDWithItems(ctx context.Context, inventoryID uint32) ([]*entity.InventoryDetail, error)
 

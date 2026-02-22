@@ -40,16 +40,18 @@ func NewAdminInventoryService(
 // CountItemsWithDiscrepancy returns the count of details with real != expected (ExpectedForAdmin).
 // It implements InventoryDiscrepancyCounter for the dashboard.
 func (s *AdminInventoryService) CountItemsWithDiscrepancy(ctx context.Context, inv *entity.Inventory) int {
-	_, withDiff := s.getInventoryCounts(ctx, inv)
+	details, err := s.inventoryDetailRepo.FindByInventoryID(ctx, inv.ID)
+	if err != nil {
+		return 0
+	}
+	s.enricher.Enrich(ctx, inv, details)
+	_, withDiff := s.getInventoryCounts(details)
 	return withDiff
 }
 
-func (s *AdminInventoryService) getInventoryCounts(ctx context.Context, inv *entity.Inventory) (totalItems, itemsWithDiff int) {
-	details, err := s.inventoryDetailRepo.FindByInventoryID(ctx, inv.ID)
-	if err != nil {
-		return 0, 0
-	}
-	s.enricher.Enrich(ctx, inv, details)
+// getInventoryCounts counts total items and items with discrepancy from pre-loaded details.
+// It uses stored suggested_value directly (no Enricher) — suitable for the list view.
+func (s *AdminInventoryService) getInventoryCounts(details []*entity.InventoryDetail) (totalItems, itemsWithDiff int) {
 	totalItems = len(details)
 	for _, d := range details {
 		if d.RealValue == nil {
@@ -77,9 +79,25 @@ func (s *AdminInventoryService) ListInventories(ctx context.Context, filter Inve
 		return nil, fmt.Errorf("failed to list inventories: %w", err)
 	}
 
+	// Batch load all details for this page in a single query.
+	ids := make([]uint32, len(inventories))
+	for i, inv := range inventories {
+		ids[i] = inv.ID
+	}
+	allDetails, err := s.inventoryDetailRepo.FindByInventoryIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch load inventory details: %w", err)
+	}
+
+	// Group details by inventory_id.
+	detailsByInv := make(map[uint32][]*entity.InventoryDetail, len(inventories))
+	for _, d := range allDetails {
+		detailsByInv[d.InventoryID] = append(detailsByInv[d.InventoryID], d)
+	}
+
 	items := make([]InventoryListItem, 0, len(inventories))
 	for _, inv := range inventories {
-		totalItems, itemsWithDiff := s.getInventoryCounts(ctx, inv)
+		totalItems, itemsWithDiff := s.getInventoryCounts(detailsByInv[inv.ID])
 		item := InventoryListItem{
 			ID:            inv.ID,
 			InventoryDate: inv.InventoryDate,
@@ -190,9 +208,8 @@ func (s *AdminInventoryService) GetInventoryDetail(ctx context.Context, inventor
 }
 
 // UpdateInventoryDetail updates a specific inventory detail (admin can edit closed inventories).
-// Shrinkage can only be set or updated when the inventory is completed.
 // FindByID(inventory) and FindByID(detail) are executed in parallel.
-func (s *AdminInventoryService) UpdateInventoryDetail(ctx context.Context, inventoryID uint32, detailID uint32, realValue, stockReceived, unitsSold, shrinkage *uint16) error {
+func (s *AdminInventoryService) UpdateInventoryDetail(ctx context.Context, inventoryID uint32, detailID uint32, suggestedValue, realValue, stockReceived, unitsSold, shrinkage *uint16) error {
 	var inv *entity.Inventory
 	var detail *entity.InventoryDetail
 
@@ -224,10 +241,10 @@ func (s *AdminInventoryService) UpdateInventoryDetail(ctx context.Context, inven
 	if detail == nil || detail.InventoryID != inventoryID {
 		return fmt.Errorf("detail not found")
 	}
-	if shrinkage != nil && inv.Status != entity.InventoryStatusCompleted {
-		return ErrShrinkageOnlyWhenCompleted
-	}
 
+	if suggestedValue != nil {
+		detail.SuggestedValue = suggestedValue
+	}
 	detail.RealValue = realValue
 	detail.StockReceived = stockReceived
 	detail.UnitsSold = unitsSold

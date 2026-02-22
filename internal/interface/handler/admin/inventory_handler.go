@@ -2,7 +2,6 @@ package admin
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -96,10 +95,11 @@ func (h *InventoryHandler) GetInventoryDetail(w http.ResponseWriter, r *http.Req
 
 // UpdateInventoryDetailRequest is the request body for updating an inventory detail.
 type UpdateInventoryDetailRequest struct {
-	RealValue     *uint16 `json:"real_value"`
-	StockReceived *uint16 `json:"stock_received"`
-	UnitsSold     *uint16 `json:"units_sold"`
-	Shrinkage     *uint16 `json:"shrinkage"`
+	SuggestedValue *uint16 `json:"suggested_value"`
+	RealValue      *uint16 `json:"real_value"`
+	StockReceived  *uint16 `json:"stock_received"`
+	UnitsSold      *uint16 `json:"units_sold"`
+	Shrinkage      *uint16 `json:"shrinkage"`
 }
 
 // UpdateInventoryDetail updates a specific inventory detail.
@@ -124,11 +124,7 @@ func (h *InventoryHandler) UpdateInventoryDetail(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := h.inventory.UpdateInventoryDetail(r.Context(), uint32(inventoryID), uint32(detailID), req.RealValue, req.StockReceived, req.UnitsSold, req.Shrinkage); err != nil {
-		if errors.Is(err, service.ErrShrinkageOnlyWhenCompleted) {
-			response.RespondError(w, http.StatusBadRequest, "solo se pueden editar mermas en inventarios completados")
-			return
-		}
+	if err := h.inventory.UpdateInventoryDetail(r.Context(), uint32(inventoryID), uint32(detailID), req.SuggestedValue, req.RealValue, req.StockReceived, req.UnitsSold, req.Shrinkage); err != nil {
 		response.RespondError(w, http.StatusInternalServerError, "failed to update inventory detail")
 		return
 	}
