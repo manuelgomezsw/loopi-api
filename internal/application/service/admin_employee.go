@@ -8,6 +8,7 @@ import (
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
 	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
+	"github.com/manuelgomezsw/loopi-api/pkg/logger"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -117,9 +118,13 @@ func (s *AdminEmployeeService) CreateEmployee(ctx context.Context, req CreateEmp
 	}
 
 	if err := s.employeeRepo.Create(ctx, employee); err != nil {
+		logger.FromContext(ctx).ErrorContext(ctx, "failed to create employee",
+			"operation", "adminEmployee.Create", "username", req.Username, "error", err)
 		return nil, fmt.Errorf("failed to create employee: %w", err)
 	}
 
+	logger.FromContext(ctx).InfoContext(ctx, "employee created",
+		"operation", "adminEmployee.Create", "employee_id", employee.ID, "username", employee.Username, "role", employee.Role)
 	return employee, nil
 }
 
@@ -199,9 +204,13 @@ func (s *AdminEmployeeService) ResetEmployeePassword(ctx context.Context, id uin
 	}
 
 	if err := s.employeeRepo.UpdatePassword(ctx, id, passwordHash); err != nil {
+		logger.FromContext(ctx).ErrorContext(ctx, "failed to reset employee password",
+			"operation", "adminEmployee.ResetPassword", "employee_id", id, "error", err)
 		return fmt.Errorf("failed to update password: %w", err)
 	}
 
+	logger.FromContext(ctx).InfoContext(ctx, "employee password reset",
+		"operation", "adminEmployee.ResetPassword", "employee_id", id)
 	return nil
 }
 

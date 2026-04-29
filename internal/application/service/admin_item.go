@@ -7,6 +7,7 @@ import (
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
 	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
+	"github.com/manuelgomezsw/loopi-api/pkg/logger"
 )
 
 // AdminItemService handles admin item operations (CRUD and add to active inventories).
@@ -133,10 +134,13 @@ func (s *AdminItemService) CreateItem(ctx context.Context, req CreateItemRequest
 
 	if req.AddToActiveInventories {
 		if err := s.addItemToActiveInventories(ctx, item); err != nil {
-			fmt.Printf("warning: failed to add item to active inventories: %v\n", err)
+			logger.FromContext(ctx).WarnContext(ctx, "failed to add item to active inventories",
+				"operation", "adminItem.Create", "item_id", item.ID, "error", err)
 		}
 	}
 
+	logger.FromContext(ctx).InfoContext(ctx, "item created",
+		"operation", "adminItem.Create", "item_id", item.ID, "name", item.Name)
 	return item, nil
 }
 
