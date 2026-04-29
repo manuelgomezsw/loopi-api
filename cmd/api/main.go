@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/manuelgomezsw/loopi-api/pkg/config"
 	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 	"github.com/manuelgomezsw/loopi-api/pkg/logger"
+	"github.com/manuelgomezsw/loopi-api/pkg/observability"
 )
 
 func main() {
@@ -20,6 +22,19 @@ func main() {
 
 	log := logger.New(cfg.Log.Level, cfg.Log.Format)
 	slog.SetDefault(log)
+
+	// Initialize OpenTelemetry tracer → Cloud Trace (no-op when GOOGLE_CLOUD_PROJECT is unset)
+	shutdownTracer, err := observability.InitTracer(
+		cfg.Tracing.ProjectID,
+		cfg.Tracing.ServiceName,
+		cfg.Tracing.ServiceVersion,
+		cfg.Tracing.Env,
+	)
+	if err != nil {
+		log.Error("failed to initialize tracer", "error", err)
+		panic(err)
+	}
+	defer shutdownTracer(context.Background())
 
 	datetime.SetTimezone(cfg.Timezone)
 	log.Info("timezone configured", "timezone", datetime.GetTimezone())

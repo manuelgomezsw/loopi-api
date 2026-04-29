@@ -18,6 +18,7 @@ type Config struct {
 	Database DatabaseConfig
 	JWT      JWTConfig
 	Log      LogConfig
+	Tracing  TracingConfig
 	Timezone string
 }
 
@@ -25,6 +26,14 @@ type Config struct {
 type LogConfig struct {
 	Level  string // debug | info | warn | error
 	Format string // text (dev) | json (production + Cloud Logging)
+}
+
+// TracingConfig holds OpenTelemetry / Cloud Trace configuration.
+type TracingConfig struct {
+	ProjectID      string
+	ServiceName    string
+	ServiceVersion string
+	Env            string
 }
 
 // ServerConfig holds server-related configuration.
@@ -49,9 +58,7 @@ type JWTConfig struct {
 }
 
 // Load reads configuration from environment variables.
-// It attempts to load from .env file if present (ignored if not found).
 func Load() (*Config, error) {
-	// Load .env file if it exists (ignore error if file not found)
 	_ = godotenv.Load()
 
 	jwtExpHours, err := strconv.Atoi(getEnv("JWT_EXPIRATION_HOURS", "24"))
@@ -79,29 +86,28 @@ func Load() (*Config, error) {
 			Secret:          getEnv("JWT_SECRET", "dev-secret-key-change-in-production"),
 			ExpirationHours: jwtExpHours,
 		},
+		Tracing: TracingConfig{
+			ProjectID:      getEnv("GOOGLE_CLOUD_PROJECT", ""),
+			ServiceName:    getEnv("SERVICE_NAME", "loopi-api"),
+			ServiceVersion: getEnv("SERVICE_VERSION", "dev"),
+			Env:            getEnv("SERVICE_ENV", "development"),
+		},
 		Timezone: getEnv("TZ", DefaultTimezone),
 	}, nil
 }
 
 // DSN returns the database connection string.
-// Uses Unix socket if InstanceConnection is set (for App Engine), otherwise TCP.
-// The timezone is URL-encoded to handle the "/" character in timezone names.
 func (c *DatabaseConfig) DSN() string {
 	return c.DSNWithTimezone(DefaultTimezone)
 }
 
 // DSNWithTimezone returns the database connection string with a specific timezone.
-// The timezone is URL-encoded to handle the "/" character in timezone names.
 func (c *DatabaseConfig) DSNWithTimezone(timezone string) string {
-	// URL encode the timezone to handle "/" in timezone names like "America/Bogota"
 	encodedTZ := url.QueryEscape(timezone)
-
 	if c.InstanceConnection != "" {
-		// App Engine: use Unix socket
 		return fmt.Sprintf("%s:%s@unix(/cloudsql/%s)/%s?charset=utf8mb4&parseTime=True&loc=%s",
 			c.User, c.Password, c.InstanceConnection, c.Name, encodedTZ)
 	}
-	// Local development: use TCP
 	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=%s",
 		c.User, c.Password, c.Host, c.Port, c.Name, encodedTZ)
 }

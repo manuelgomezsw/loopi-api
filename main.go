@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/manuelgomezsw/loopi-api/internal/interface/router"
 	"github.com/manuelgomezsw/loopi-api/pkg/config"
 	"github.com/manuelgomezsw/loopi-api/pkg/logger"
+	"github.com/manuelgomezsw/loopi-api/pkg/observability"
 )
 
 func main() {
@@ -19,6 +21,19 @@ func main() {
 
 	log := logger.New(cfg.Log.Level, cfg.Log.Format)
 	slog.SetDefault(log)
+
+	// Initialize OpenTelemetry tracer → Cloud Trace (no-op when GOOGLE_CLOUD_PROJECT is unset)
+	shutdownTracer, err := observability.InitTracer(
+		cfg.Tracing.ProjectID,
+		cfg.Tracing.ServiceName,
+		cfg.Tracing.ServiceVersion,
+		cfg.Tracing.Env,
+	)
+	if err != nil {
+		log.Error("failed to initialize tracer", "error", err)
+		panic(err)
+	}
+	defer shutdownTracer(context.Background())
 
 	db, err := database.NewMySQL(cfg.Database)
 	if err != nil {
