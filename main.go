@@ -35,6 +35,14 @@ func main() {
 	}
 	defer shutdownTracer(context.Background())
 
+	// Initialize OpenTelemetry meter → Cloud Monitoring (no-op when GOOGLE_CLOUD_PROJECT is unset)
+	shutdownMeter, err := observability.InitMeter(cfg.Tracing.ProjectID)
+	if err != nil {
+		log.Error("failed to initialize meter", "error", err)
+		panic(err)
+	}
+	defer shutdownMeter(context.Background())
+
 	db, err := database.NewMySQL(cfg.Database)
 	if err != nil {
 		log.Error("failed to connect to database", "error", err)

@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
 	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
@@ -16,6 +20,7 @@ type AdminItemService struct {
 	measurementUnitRepo repository.MeasurementUnitRepository
 	inventoryRepo       repository.InventoryRepository
 	inventoryDetailRepo repository.InventoryDetailRepository
+	itemsCreatedCounter metric.Int64Counter
 }
 
 // NewAdminItemService creates a new admin item service.
@@ -25,11 +30,18 @@ func NewAdminItemService(
 	inventoryRepo repository.InventoryRepository,
 	inventoryDetailRepo repository.InventoryDetailRepository,
 ) *AdminItemService {
+	meter := otel.GetMeterProvider().Meter("loopi-api")
+	itemsCreatedCounter, _ := meter.Int64Counter(
+		"loopi.items.created",
+		metric.WithDescription("Total de ítems creados por tipo"),
+		metric.WithUnit("{item}"),
+	)
 	return &AdminItemService{
 		itemRepo:            itemRepo,
 		measurementUnitRepo: measurementUnitRepo,
 		inventoryRepo:       inventoryRepo,
 		inventoryDetailRepo: inventoryDetailRepo,
+		itemsCreatedCounter: itemsCreatedCounter,
 	}
 }
 
@@ -131,6 +143,13 @@ func (s *AdminItemService) CreateItem(ctx context.Context, req CreateItemRequest
 	if err := s.itemRepo.Create(ctx, item); err != nil {
 		return nil, fmt.Errorf("failed to create item: %w", err)
 	}
+
+	s.itemsCreatedCounter.Add(ctx, 1,
+		metric.WithAttributes(
+			attribute.String("type", string(item.Type)),
+			attribute.String("frequency", string(item.InventoryFrequency)),
+		),
+	)
 
 	if req.AddToActiveInventories {
 		if err := s.addItemToActiveInventories(ctx, item); err != nil {
