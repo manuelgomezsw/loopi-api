@@ -10,6 +10,7 @@ import (
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
 	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
 	apperrors "github.com/manuelgomezsw/loopi-api/pkg/errors"
+	"github.com/manuelgomezsw/loopi-api/pkg/logger"
 )
 
 // InventoryService handles inventory operations.
@@ -120,14 +121,21 @@ func (s *InventoryService) CreateInventory(ctx context.Context, inventoryType en
 	}
 
 	if err := s.inventoryRepo.Create(ctx, inventory); err != nil {
+		logger.FromContext(ctx).ErrorContext(ctx, "failed to create inventory",
+			"operation", "inventory.Create", "error", err)
 		return nil, fmt.Errorf("failed to create inventory: %w", err)
 	}
 
-	// Pre-populate inventory details with items and suggested values
 	if err := s.prepopulateInventoryDetails(ctx, inventory); err != nil {
 		return nil, fmt.Errorf("failed to prepopulate inventory details: %w", err)
 	}
 
+	logger.FromContext(ctx).InfoContext(ctx, "inventory created",
+		"operation", "inventory.Create",
+		"inventory_id", inventory.ID,
+		"type", inventory.InventoryType,
+		"responsible_id", inventory.ResponsibleID,
+	)
 	return inventory, nil
 }
 
@@ -380,8 +388,15 @@ func (s *InventoryService) CompleteInventory(ctx context.Context, inventoryID ui
 	}
 
 	if err := s.inventoryRepo.Complete(ctx, inventoryID); err != nil {
+		logger.FromContext(ctx).ErrorContext(ctx, "failed to complete inventory",
+			"operation", "inventory.Complete", "inventory_id", inventoryID, "error", err)
 		return 0, fmt.Errorf("failed to complete inventory: %w", err)
 	}
 
+	logger.FromContext(ctx).InfoContext(ctx, "inventory completed",
+		"operation", "inventory.Complete",
+		"inventory_id", inventoryID,
+		"discrepancies", discrepancyCount,
+	)
 	return discrepancyCount, nil
 }

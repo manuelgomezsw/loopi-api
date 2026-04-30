@@ -2,6 +2,7 @@ package router
 
 import (
 	"database/sql"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -19,14 +20,14 @@ import (
 )
 
 // New creates and configures the HTTP router with all routes.
-func New(db *sql.DB, cfg *config.Config) http.Handler {
+func New(db *sql.DB, cfg *config.Config, log *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 
 	// Global middleware
-	r.Use(chimiddleware.Logger)
-	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
+	r.Use(middleware.RequestLogger(log))
+	r.Use(chimiddleware.Recoverer)
 
 	// CORS configuration
 	r.Use(cors.Handler(cors.Options{

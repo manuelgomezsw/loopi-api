@@ -55,6 +55,7 @@
 | **Password hashing** | bcrypt | golang.org/x/crypto |
 | **Variables de entorno** | godotenv | v1.5.1 |
 | **Concurrencia** | errgroup | golang.org/x/sync |
+| **Logging** | log/slog (stdlib) | Go 1.21+ |
 | **Frontend framework** | Angular | 20.1.0 |
 | **Frontend estilos** | Tailwind CSS | 4.1.18 |
 | **Frontend hosting** | Firebase Hosting | - |
@@ -158,7 +159,7 @@ internal/
 
 | Middleware | Scope | Función |
 |-----------|-------|---------|
-| `chi.Logger` | Global | Log de requests |
+| `middleware.RequestLogger` | Global | Log estructurado JSON de requests (reemplaza chi.Logger) — incluye request_id, method, path, status, latency_ms |
 | `chi.Recoverer` | Global | Recupera panics |
 | `chi.RequestID` | Global | Header X-Request-ID |
 | `chi.RealIP` | Global | IP real del cliente |
@@ -371,10 +372,17 @@ eg.Go(func() error { /* get details */ })
 | Variable | Tipo | Default | Descripción |
 |----------|------|---------|-------------|
 | `SERVER_PORT` | string | `"8080"` | Puerto del servidor |
-| `DB_DSN` | string | - | DSN de MySQL |
+| `DB_HOST` | string | `"localhost"` | Host de MySQL |
+| `DB_PORT` | string | `"3306"` | Puerto de MySQL |
+| `DB_USER` | string | `"loopi"` | Usuario de MySQL |
+| `DB_PASSWORD` | string | - | Contraseña de MySQL |
+| `DB_NAME` | string | `"loopi"` | Nombre de la base de datos |
+| `DB_INSTANCE_CONNECTION` | string | - | Unix socket para Cloud SQL (App Engine) |
 | `JWT_SECRET` | string | - | Secreto para JWT |
 | `JWT_EXPIRATION_HOURS` | int | 24 | Horas de validez del token |
-| `ENVIRONMENT` | string | `"development"` | Ambiente actual |
+| `TZ` | string | `"America/Bogota"` | Zona horaria de la aplicación |
+| `LOG_LEVEL` | string | `"info"` | Nivel de log: debug, info, warn, error |
+| `LOG_FORMAT` | string | `"text"` | Formato: text (dev) / json (producción + Cloud Logging) |
 
 ### 5.2 Conexión a Base de Datos ✅✅
 
@@ -496,3 +504,72 @@ src/app/
 | DT-004 | 🟡 Media | Métodos obsoletos `HasDiscrepancy()` y `Difference()` en entidad (si aún existen) | docs/PLAN_AJUSTES_ESTRUCTURALES_SENIOR.md |
 | DT-005 | 🟢 Baja | README.md desactualizado (documenta 10 de 37 endpoints) | Análisis de código |
 | DT-006 | 🟢 Baja | Lógica del Enricher potencialmente duplicada en InventoryService y AdminService | docs/AUTOCRITICA_DISCREPANCIAS.md |
+
+---
+
+## 9. Observabilidad y Logging ✅✅
+
+### 9.1 Librería y Estrategia
+
+- **Librería**: `log/slog` (stdlib Go 1.21+) — sin dependencias externas
+- **Destino**: stdout → Google Cloud Logging (parsea JSON automáticamente en GAE)
+- **Formato producción**: JSON con campo `severity` (requerido por Cloud Logging)
+- **Formato desarrollo**: texto legible (controlado por `LOG_FORMAT=text`)
+- **Paquete**: `pkg/logger` — factory `New(level, format)`, `WithContext`, `FromContext`
+
+### 9.2 Niveles de Log
+
+| Nivel | Cuándo |
+|-------|--------|
+| DEBUG | Queries SQL, estado interno (solo dev, `LOG_LEVEL=debug`) |
+| INFO | Eventos de negocio exitosos: login, inventario creado/completado, empleado creado |
+| WARN | Anomalías recuperables: credenciales inválidas, item no añadido a inventarios activos |
+| ERROR | Fallos que requieren atención: errores de DB, errores de infraestructura |
+
+### 9.3 Campos Estándar por Capa
+
+**Todos los logs incluyen**: `severity`, `time`, `message`
+
+**HTTP layer** (middleware `RequestLogger`):
+```
+request_id, method, path, status, latency_ms, remote_ip, user_agent
+```
+
+**Service layer**:
+```
+request_id (propagado por contexto), operation ("domain.Method"), error (solo WARN/ERROR)
+```
+
+### 9.4 Propagación por Contexto (Context Pattern)
+
+```go
+// El middleware inyecta un logger con request_id en el context de cada request
+reqLog := log.With("request_id", reqID)
+ctx := pkglogger.WithContext(r.Context(), reqLog)
+
+// Los servicios consumen sin cambio de constructor ni firma de métodos
+logger.FromContext(ctx).InfoContext(ctx, "inventory completed",
+    "operation", "inventory.Complete",
+    "inventory_id", inventoryID,
+    "discrepancies", discrepancyCount,
+)
+```
+
+### 9.5 Middleware — Orden de Ejecución
+
+```
+RequestID → RealIP → RequestLogger → Recoverer → CORS → AuthMiddleware → AdminOnly
+```
+
+`RequestID` debe ejecutarse ANTES de `RequestLogger` para que el request_id esté disponible.
+
+### 9.6 Seguridad — Campos PROHIBIDOS en Logs
+
+`password`, `password_hash`, `token`, `jwt`, `secret`, `authorization`
+Cuerpos completos de request/response, PII sin enmascarar.
+
+### 9.7 Pasos Futuros
+
+- Métricas con OpenTelemetry → Cloud Monitoring
+- Alertas en Cloud Monitoring por tasa de errores 5xx
+- Slow query logging en repositorios (queries > 500ms)

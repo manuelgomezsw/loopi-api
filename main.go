@@ -1,38 +1,41 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/manuelgomezsw/loopi-api/internal/infrastructure/database"
 	"github.com/manuelgomezsw/loopi-api/internal/interface/router"
 	"github.com/manuelgomezsw/loopi-api/pkg/config"
+	"github.com/manuelgomezsw/loopi-api/pkg/logger"
 )
 
 func main() {
-	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("failed to load configuration: %v", err)
+		slog.Error("failed to load configuration", "error", err)
+		panic(err)
 	}
 
-	// Initialize database connection
+	log := logger.New(cfg.Log.Level, cfg.Log.Format)
+	slog.SetDefault(log)
+
 	db, err := database.NewMySQL(cfg.Database)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		log.Error("failed to connect to database", "error", err)
+		panic(err)
 	}
 	defer db.Close()
 
-	log.Println("Connected to database successfully")
+	log.Info("database connected")
 
-	// Initialize router with dependencies
-	r := router.New(db, cfg)
+	r := router.New(db, cfg, log)
 
-	// Start server
 	addr := ":" + cfg.Server.Port
-	log.Printf("Starting server on %s", addr)
+	log.Info("server starting", "addr", addr)
 
 	if err := http.ListenAndServe(addr, r); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+		log.Error("server stopped", "error", err)
+		panic(err)
 	}
 }

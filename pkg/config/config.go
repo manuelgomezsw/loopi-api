@@ -17,7 +17,14 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	JWT      JWTConfig
+	Log      LogConfig
 	Timezone string
+}
+
+// LogConfig holds logging configuration.
+type LogConfig struct {
+	Level  string // debug | info | warn | error
+	Format string // text (dev) | json (production + Cloud Logging)
 }
 
 // ServerConfig holds server-related configuration.
@@ -55,6 +62,10 @@ func Load() (*Config, error) {
 	return &Config{
 		Server: ServerConfig{
 			Port: getEnv("SERVER_PORT", "8080"),
+		},
+		Log: LogConfig{
+			Level:  getEnv("LOG_LEVEL", "info"),
+			Format: getEnv("LOG_FORMAT", "text"),
 		},
 		Database: DatabaseConfig{
 			Host:               getEnv("DB_HOST", "localhost"),
