@@ -95,6 +95,9 @@ func (f *fakeDetailRepoForDiscrepancy) Update(ctx context.Context, detail *entit
 func (f *fakeDetailRepoForDiscrepancy) Upsert(ctx context.Context, detail *entity.InventoryDetail) error {
 	return nil
 }
+func (f *fakeDetailRepoForDiscrepancy) FindByInventoryIDs(ctx context.Context, ids []uint32) ([]*entity.InventoryDetail, error) {
+	return f.details, nil
+}
 func (f *fakeDetailRepoForDiscrepancy) CreateBatch(ctx context.Context, details []*entity.InventoryDetail) error {
 	return nil
 }
