@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	invdomain "github.com/manuelgomezsw/loopi-api/internal/domain/inventory"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
@@ -19,6 +23,7 @@ type InventoryService struct {
 	inventoryDetailRepo repository.InventoryDetailRepository
 	itemRepo            repository.ItemRepository
 	enricher            *invdomain.Enricher
+	movementsCounter    metric.Int64Counter
 }
 
 // NewInventoryService creates a new inventory service.
@@ -28,11 +33,18 @@ func NewInventoryService(
 	itemRepo repository.ItemRepository,
 	enricher *invdomain.Enricher,
 ) *InventoryService {
+	meter := otel.GetMeterProvider().Meter("loopi-api")
+	movementsCounter, _ := meter.Int64Counter(
+		"loopi.inventory.movements",
+		metric.WithDescription("Total de movimientos de inventario (create/complete)"),
+		metric.WithUnit("{movement}"),
+	)
 	return &InventoryService{
 		inventoryRepo:       inventoryRepo,
 		inventoryDetailRepo: inventoryDetailRepo,
 		itemRepo:            itemRepo,
 		enricher:            enricher,
+		movementsCounter:    movementsCounter,
 	}
 }
 
@@ -136,6 +148,12 @@ func (s *InventoryService) CreateInventory(ctx context.Context, inventoryType en
 		"type", inventory.InventoryType,
 		"responsible_id", inventory.ResponsibleID,
 	)
+	s.movementsCounter.Add(ctx, 1,
+		metric.WithAttributes(
+			attribute.String("action", "create"),
+			attribute.String("type", string(inventoryType)),
+		),
+	)
 	return inventory, nil
 }
 
@@ -176,7 +194,7 @@ func (s *InventoryService) prepopulateInventoryDetails(ctx context.Context, inve
 			ItemID:      item.ID,
 		}
 
-		// Set suggested value: real_anterior only (merma es control del periodo anterior, no resta del esperado del siguiente)
+		// Set suggested value: real_anterior only
 		if realPrev, ok := previousRealByItem[item.ID]; ok {
 			detail.SuggestedValue = &realPrev
 		}
@@ -192,7 +210,6 @@ func (s *InventoryService) prepopulateInventoryDetails(ctx context.Context, inve
 }
 
 // GetInventoryItems returns the items for an inventory with their current state.
-// Suggested values are recomputed from the previous inventory (real only; mermas do not subtract from next period's expected).
 func (s *InventoryService) GetInventoryItems(ctx context.Context, inventoryID uint32) (*entity.Inventory, []*entity.InventoryDetail, error) {
 	inventory, err := s.inventoryRepo.FindByID(ctx, inventoryID)
 	if err != nil {
@@ -211,19 +228,18 @@ func (s *InventoryService) GetInventoryItems(ctx context.Context, inventoryID ui
 	return inventory, details, nil
 }
 
-// ComputeExpectedAtEnd returns the expected count at end of period (delegates to Inventory domain).
+// ComputeExpectedAtEnd returns the expected count at end of period.
 func (s *InventoryService) ComputeExpectedAtEnd(d *entity.InventoryDetail) uint16 {
 	return invdomain.ExpectedAtEnd(d)
 }
 
-// HasDiscrepancyFromExpectedEnd returns true when real_value != expected_at_end (delegates to Inventory domain).
+// HasDiscrepancyFromExpectedEnd returns true when real_value != expected_at_end.
 func (s *InventoryService) HasDiscrepancyFromExpectedEnd(d *entity.InventoryDetail) bool {
 	expected := invdomain.ExpectedAtEnd(d)
 	return invdomain.HasDiscrepancyFromExpectedEnd(d, expected)
 }
 
 // GetDiscrepancies returns items with discrepancies (real_value != expected_at_end).
-// Expected at end = suggested − units_sold + stock_received, so items that match after sales/purchases are not listed.
 func (s *InventoryService) GetDiscrepancies(ctx context.Context, inventoryID uint32) (*entity.Inventory, []*entity.InventoryDetail, error) {
 	inventory, err := s.inventoryRepo.FindByID(ctx, inventoryID)
 	if err != nil {
@@ -251,7 +267,6 @@ func (s *InventoryService) GetDiscrepancies(ctx context.Context, inventoryID uin
 
 // SaveInventoryDetail saves or updates an inventory detail (physical count only).
 func (s *InventoryService) SaveInventoryDetail(ctx context.Context, inventoryID uint32, itemID uint16, realValue uint16) (*entity.InventoryDetail, error) {
-	// Get inventory to verify it exists and is in progress
 	inventory, err := s.inventoryRepo.FindByID(ctx, inventoryID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get inventory: %w", err)
@@ -263,7 +278,6 @@ func (s *InventoryService) SaveInventoryDetail(ctx context.Context, inventoryID 
 		return nil, apperrors.New(400, "inventory is already completed")
 	}
 
-	// Get existing detail
 	detail, err := s.inventoryDetailRepo.FindByInventoryAndItem(ctx, inventoryID, itemID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get inventory detail: %w", err)
@@ -272,7 +286,6 @@ func (s *InventoryService) SaveInventoryDetail(ctx context.Context, inventoryID 
 		return nil, apperrors.New(400, "item not found in this inventory")
 	}
 
-	// Update detail with physical count only
 	detail.RealValue = &realValue
 
 	if err := s.inventoryDetailRepo.Update(ctx, detail); err != nil {
@@ -284,7 +297,6 @@ func (s *InventoryService) SaveInventoryDetail(ctx context.Context, inventoryID 
 
 // SaveSalesAndPurchases saves sales and purchases for an inventory detail.
 func (s *InventoryService) SaveSalesAndPurchases(ctx context.Context, inventoryID uint32, itemID uint16, stockReceived, unitsSold *uint16) (*entity.InventoryDetail, error) {
-	// Get inventory to verify it exists and is in progress
 	inventory, err := s.inventoryRepo.FindByID(ctx, inventoryID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get inventory: %w", err)
@@ -299,7 +311,6 @@ func (s *InventoryService) SaveSalesAndPurchases(ctx context.Context, inventoryI
 		return nil, apperrors.New(400, "this inventory type does not require sales and purchases")
 	}
 
-	// Get existing detail
 	detail, err := s.inventoryDetailRepo.FindByInventoryAndItem(ctx, inventoryID, itemID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get inventory detail: %w", err)
@@ -308,18 +319,15 @@ func (s *InventoryService) SaveSalesAndPurchases(ctx context.Context, inventoryI
 		return nil, apperrors.New(400, "item not found in this inventory")
 	}
 
-	// Weekly and monthly inventories record only purchases (no sales)
 	unitsToApply := unitsSold
 	if inventory.RequiresPurchasesOnly() {
 		zero := uint16(0)
 		unitsToApply = &zero
 	}
 
-	// Update sales and purchases
 	detail.StockReceived = stockReceived
 	detail.UnitsSold = unitsToApply
 
-	// Recalculate suggested value based on previous + received - sold
 	if detail.SuggestedValue != nil {
 		suggested := *detail.SuggestedValue
 		if stockReceived != nil {
@@ -347,9 +355,8 @@ func (s *InventoryService) GetInventorySummary(ctx context.Context, inventoryID 
 	return s.GetInventoryItems(ctx, inventoryID)
 }
 
-// CompleteInventory marks an inventory as completed and creates issues for discrepancies.
+// CompleteInventory marks an inventory as completed.
 func (s *InventoryService) CompleteInventory(ctx context.Context, inventoryID uint32) (int, error) {
-	// Get inventory
 	inventory, err := s.inventoryRepo.FindByID(ctx, inventoryID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get inventory: %w", err)
@@ -361,7 +368,6 @@ func (s *InventoryService) CompleteInventory(ctx context.Context, inventoryID ui
 		return 0, apperrors.New(400, "inventory is already completed")
 	}
 
-	// Get all details
 	details, err := s.inventoryDetailRepo.FindByInventoryID(ctx, inventoryID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get inventory details: %w", err)
@@ -369,14 +375,12 @@ func (s *InventoryService) CompleteInventory(ctx context.Context, inventoryID ui
 
 	s.enricher.Enrich(ctx, inventory, details)
 
-	// Check if all items have been completed
 	for _, d := range details {
 		if !d.IsComplete() {
 			return 0, apperrors.New(400, "not all items have been inventoried")
 		}
 	}
 
-	// Count discrepancies (real != expected_at_end; skip for initial inventories). No persistence.
 	discrepancyCount := 0
 	if !inventory.IsInitial() {
 		for _, d := range details {
@@ -397,6 +401,12 @@ func (s *InventoryService) CompleteInventory(ctx context.Context, inventoryID ui
 		"operation", "inventory.Complete",
 		"inventory_id", inventoryID,
 		"discrepancies", discrepancyCount,
+	)
+	s.movementsCounter.Add(ctx, 1,
+		metric.WithAttributes(
+			attribute.String("action", "complete"),
+			attribute.String("type", string(inventory.InventoryType)),
+		),
 	)
 	return discrepancyCount, nil
 }

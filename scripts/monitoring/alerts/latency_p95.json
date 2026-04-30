@@ -1,0 +1,36 @@
+{
+  "displayName": "Loopi API — Latencia p95 > 2s",
+  "documentation": {
+    "content": "Se dispara cuando el percentil 95 de latencia HTTP supera 2000ms en los últimos 5 minutos. Revisar trazas lentas en Cloud Trace.",
+    "mimeType": "text/markdown"
+  },
+  "conditions": [
+    {
+      "displayName": "p95 latencia > 2000ms",
+      "conditionThreshold": {
+        "filter": "resource.type=\"gae_app\" AND metric.type=\"appengine.googleapis.com/http/server/response_latencies\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "crossSeriesReducer": "REDUCE_PERCENTILE_95",
+            "perSeriesAligner": "ALIGN_DELTA"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 2000,
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "combiner": "OR",
+  "alertStrategy": {
+    "notificationRateLimit": {
+      "period": "600s"
+    },
+    "autoClose": "3600s"
+  },
+  "severity": "WARNING"
+}
