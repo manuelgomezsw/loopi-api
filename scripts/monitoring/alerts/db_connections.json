@@ -1,0 +1,36 @@
+{
+  "displayName": "Loopi API — Cloud SQL conexiones > 20",
+  "documentation": {
+    "content": "Se dispara cuando las conexiones activas a Cloud SQL superan 20 (pool máximo configurado = 25). Riesgo de agotamiento del pool de conexiones.",
+    "mimeType": "text/markdown"
+  },
+  "conditions": [
+    {
+      "displayName": "Conexiones activas > 20",
+      "conditionThreshold": {
+        "filter": "resource.type=\"cloudsql_database\" AND metric.type=\"cloudsql.googleapis.com/database/network/connections\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "60s",
+            "crossSeriesReducer": "REDUCE_MAX",
+            "perSeriesAligner": "ALIGN_MEAN"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 20,
+        "duration": "120s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "combiner": "OR",
+  "alertStrategy": {
+    "notificationRateLimit": {
+      "period": "300s"
+    },
+    "autoClose": "1800s"
+  },
+  "severity": "WARNING"
+}

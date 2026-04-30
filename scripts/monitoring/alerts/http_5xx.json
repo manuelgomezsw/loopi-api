@@ -1,0 +1,36 @@
+{
+  "displayName": "Loopi API — HTTP 5xx errors",
+  "documentation": {
+    "content": "Se dispara cuando el número de respuestas HTTP 5xx supera 5 en un minuto. Revisar logs en Cloud Logging con: resource.type=\"gae_app\" AND severity=ERROR",
+    "mimeType": "text/markdown"
+  },
+  "conditions": [
+    {
+      "displayName": "5xx count > 5 por minuto",
+      "conditionThreshold": {
+        "filter": "resource.type=\"gae_app\" AND metric.type=\"appengine.googleapis.com/http/server/response_count\" AND metric.labels.response_code>=\"500\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "60s",
+            "crossSeriesReducer": "REDUCE_SUM",
+            "perSeriesAligner": "ALIGN_RATE"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 5,
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "combiner": "OR",
+  "alertStrategy": {
+    "notificationRateLimit": {
+      "period": "300s"
+    },
+    "autoClose": "1800s"
+  },
+  "severity": "ERROR"
+}

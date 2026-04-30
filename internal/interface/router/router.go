@@ -2,11 +2,16 @@ package router
 
 import (
 	"database/sql"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+
 	"github.com/manuelgomezsw/loopi-api/internal/application/service"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/inventory"
 	"github.com/manuelgomezsw/loopi-api/internal/infrastructure/auth"
@@ -19,14 +24,27 @@ import (
 )
 
 // New creates and configures the HTTP router with all routes.
-func New(db *sql.DB, cfg *config.Config) http.Handler {
+func New(db *sql.DB, cfg *config.Config, log *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 
 	// Global middleware
-	r.Use(chimiddleware.Logger)
-	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
+	r.Use(otelhttp.NewMiddleware("loopi-api",
+		otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
+	))
+	// Annotate each span with the matched Chi route pattern (e.g. /api/items/{itemID})
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			labeler, ok := otelhttp.LabelerFromContext(req.Context())
+			if ok {
+				labeler.Add(attribute.String(string(semconv.HTTPRouteKey), chi.RouteContext(req.Context()).RoutePattern()))
+			}
+			next.ServeHTTP(w, req)
+		})
+	})
+	r.Use(middleware.RequestLogger(log))
+	r.Use(chimiddleware.Recoverer)
 
 	// CORS configuration
 	r.Use(cors.Handler(cors.Options{
@@ -96,21 +114,17 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
-		// Auth routes (public)
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/login", authHandler.Login)
 		})
 
-		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(jwtManager))
 
-			// Employees routes (session)
 			r.Route("/employees", func(r chi.Router) {
 				r.Get("/me", authHandler.GetMe)
 			})
 
-			// Employee inventories (operativo)
 			r.Route("/inventories", func(r chi.Router) {
 				r.Get("/latest", employeeInventoryHandler.GetLatest)
 				r.Get("/in-progress", employeeInventoryHandler.GetInProgress)
@@ -127,7 +141,6 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 				})
 			})
 
-			// Admin routes (requires admin role)
 			r.Route("/admin", func(r chi.Router) {
 				r.Use(middleware.AdminOnly)
 

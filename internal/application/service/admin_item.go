@@ -4,9 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/manuelgomezsw/loopi-api/internal/domain/entity"
 	"github.com/manuelgomezsw/loopi-api/internal/domain/repository"
 	"github.com/manuelgomezsw/loopi-api/pkg/datetime"
+	"github.com/manuelgomezsw/loopi-api/pkg/logger"
 )
 
 // AdminItemService handles admin item operations (CRUD and add to active inventories).
@@ -15,6 +20,7 @@ type AdminItemService struct {
 	measurementUnitRepo repository.MeasurementUnitRepository
 	inventoryRepo       repository.InventoryRepository
 	inventoryDetailRepo repository.InventoryDetailRepository
+	itemsCreatedCounter metric.Int64Counter
 }
 
 // NewAdminItemService creates a new admin item service.
@@ -24,11 +30,18 @@ func NewAdminItemService(
 	inventoryRepo repository.InventoryRepository,
 	inventoryDetailRepo repository.InventoryDetailRepository,
 ) *AdminItemService {
+	meter := otel.GetMeterProvider().Meter("loopi-api")
+	itemsCreatedCounter, _ := meter.Int64Counter(
+		"loopi.items.created",
+		metric.WithDescription("Total de ítems creados por tipo"),
+		metric.WithUnit("{item}"),
+	)
 	return &AdminItemService{
 		itemRepo:            itemRepo,
 		measurementUnitRepo: measurementUnitRepo,
 		inventoryRepo:       inventoryRepo,
 		inventoryDetailRepo: inventoryDetailRepo,
+		itemsCreatedCounter: itemsCreatedCounter,
 	}
 }
 
@@ -131,12 +144,22 @@ func (s *AdminItemService) CreateItem(ctx context.Context, req CreateItemRequest
 		return nil, fmt.Errorf("failed to create item: %w", err)
 	}
 
+	s.itemsCreatedCounter.Add(ctx, 1,
+		metric.WithAttributes(
+			attribute.String("type", string(item.Type)),
+			attribute.String("frequency", string(item.InventoryFrequency)),
+		),
+	)
+
 	if req.AddToActiveInventories {
 		if err := s.addItemToActiveInventories(ctx, item); err != nil {
-			fmt.Printf("warning: failed to add item to active inventories: %v\n", err)
+			logger.FromContext(ctx).WarnContext(ctx, "failed to add item to active inventories",
+				"operation", "adminItem.Create", "item_id", item.ID, "error", err)
 		}
 	}
 
+	logger.FromContext(ctx).InfoContext(ctx, "item created",
+		"operation", "adminItem.Create", "item_id", item.ID, "name", item.Name)
 	return item, nil
 }
 
