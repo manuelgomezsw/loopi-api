@@ -1,0 +1,169 @@
+{
+  "displayName": "Loopi API — Operations",
+  "gridLayout": {
+    "columns": "2",
+    "widgets": [
+      {
+        "title": "Request Rate (req/min)",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "resource.type=\"gae_app\" AND metric.type=\"appengine.googleapis.com/http/server/response_count\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "perSeriesAligner": "ALIGN_RATE"
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "legendTemplate": "requests/min"
+            }
+          ],
+          "timeshiftDuration": "0s",
+          "yAxis": { "label": "req/min", "scale": "LINEAR" }
+        }
+      },
+      {
+        "title": "HTTP 5xx Errors",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "resource.type=\"gae_app\" AND metric.type=\"appengine.googleapis.com/http/server/response_count\" AND metric.labels.response_code>=\"500\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "perSeriesAligner": "ALIGN_RATE"
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "legendTemplate": "5xx errors/min"
+            }
+          ],
+          "yAxis": { "label": "errors/min", "scale": "LINEAR" }
+        }
+      },
+      {
+        "title": "HTTP Latencia (ms)",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "resource.type=\"gae_app\" AND metric.type=\"appengine.googleapis.com/http/server/response_latencies\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "crossSeriesReducer": "REDUCE_PERCENTILE_50",
+                    "perSeriesAligner": "ALIGN_DELTA"
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "legendTemplate": "p50"
+            },
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "resource.type=\"gae_app\" AND metric.type=\"appengine.googleapis.com/http/server/response_latencies\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "crossSeriesReducer": "REDUCE_PERCENTILE_95",
+                    "perSeriesAligner": "ALIGN_DELTA"
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "legendTemplate": "p95"
+            }
+          ],
+          "yAxis": { "label": "ms", "scale": "LINEAR" }
+        }
+      },
+      {
+        "title": "App Engine — Instancias Activas",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "resource.type=\"gae_app\" AND metric.type=\"appengine.googleapis.com/system/instance_count\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "perSeriesAligner": "ALIGN_MEAN"
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "legendTemplate": "instances"
+            }
+          ],
+          "yAxis": { "label": "instances", "scale": "LINEAR" }
+        }
+      },
+      {
+        "title": "Cloud SQL — Conexiones Activas",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "resource.type=\"cloudsql_database\" AND metric.type=\"cloudsql.googleapis.com/database/network/connections\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "crossSeriesReducer": "REDUCE_MAX",
+                    "perSeriesAligner": "ALIGN_MEAN"
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "legendTemplate": "connections"
+            }
+          ],
+          "yAxis": { "label": "connections", "scale": "LINEAR" }
+        }
+      },
+      {
+        "title": "Loopi — Métricas de Negocio",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "resource.type=\"generic_task\" AND metric.type=\"custom.googleapis.com/loopi/auth/logins\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "perSeriesAligner": "ALIGN_RATE"
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "legendTemplate": "logins/min"
+            },
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "resource.type=\"generic_task\" AND metric.type=\"custom.googleapis.com/loopi/inventory/movements\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "perSeriesAligner": "ALIGN_RATE"
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "legendTemplate": "inventarios/min"
+            }
+          ],
+          "yAxis": { "label": "events/min", "scale": "LINEAR" }
+        }
+      }
+    ]
+  }
+}
