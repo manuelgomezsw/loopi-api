@@ -43,6 +43,18 @@ git merge --no-ff feature/<nombre>
 - NUNCA mezclar múltiples features en una sola rama
 - Un plan de Claude = una rama feature
 
+### Claude en worktrees (Claude Code)
+Cuando Claude Code abre un worktree, la rama se llama `claude/xxx` automáticamente.
+**Esa rama NO es válida para desarrollo.** Antes del primer commit, ejecutar obligatoriamente:
+
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feature/<nombre-descriptivo>
+```
+
+El PR **siempre** debe apuntar a `develop`, nunca a `master`.
+
 ---
 
 ## Logging — Reglas obligatorias
@@ -120,3 +132,8 @@ Siempre que se agregue/cambie:
 - Errores de dominio: usar `pkg/errors` (`apperrors.ErrNotFound`, `apperrors.New(code, msg)`)
 - Respuestas HTTP: usar `internal/interface/response` (`RespondJSON`, `RespondError`, `RespondSuccess`)
 - No agregar dependencias externas sin evaluar alternativas stdlib primero
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
