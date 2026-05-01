@@ -120,3 +120,8 @@ Siempre que se agregue/cambie:
 - Errores de dominio: usar `pkg/errors` (`apperrors.ErrNotFound`, `apperrors.New(code, msg)`)
 - Respuestas HTTP: usar `internal/interface/response` (`RespondJSON`, `RespondError`, `RespondSuccess`)
 - No agregar dependencias externas sin evaluar alternativas stdlib primero
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
