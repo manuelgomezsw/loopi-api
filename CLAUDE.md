@@ -43,6 +43,18 @@ git merge --no-ff feature/<nombre>
 - NUNCA mezclar múltiples features en una sola rama
 - Un plan de Claude = una rama feature
 
+### Claude en worktrees (Claude Code)
+Cuando Claude Code abre un worktree, la rama se llama `claude/xxx` automáticamente.
+**Esa rama NO es válida para desarrollo.** Antes del primer commit, ejecutar obligatoriamente:
+
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feature/<nombre-descriptivo>
+```
+
+El PR **siempre** debe apuntar a `develop`, nunca a `master`.
+
 ---
 
 ## Logging — Reglas obligatorias
