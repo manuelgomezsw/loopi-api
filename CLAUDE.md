@@ -1,11 +1,5 @@
 # loopi-api — Instrucciones para Claude
 
-## Idioma del workflow SDD
-
-**Todo el output del workflow SDD (speckit) debe estar en español (es-CO).**
-
-Esto incluye: spec.md, plan.md, tasks.md, research.md, data-model.md, checklists y todos los mensajes generados por comandos `/speckit-*`. El código fuente, identificadores, nombres de archivos y strings técnicos (variables, rutas, SQL) permanecen en inglés.
-
 ## Stack y arquitectura
 
 - **Lenguaje**: Go 1.24, módulo `github.com/manuelgomezsw/loopi-api`
