@@ -13,7 +13,7 @@ env_variables:
   DB_INSTANCE_CONNECTION: "quotes-api-100:us-east1:quotes-instance"
   DB_USER: "loopi-user"
   DB_PASSWORD: "7:Z\"I3=9,(VCU1R+"
-  DB_NAME: "loopi"
+  APP_ENV: "production"
   JWT_SECRET: "y4mmCP+GXmkNogRwxzqBKuNO72j29fkr4T65wzCN5Ug="
   JWT_EXPIRATION_HOURS: "24"
   TZ: "America/Bogota"
