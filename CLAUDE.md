@@ -6,6 +6,41 @@
 
 Esto incluye: spec.md, plan.md, tasks.md, research.md, data-model.md, checklists y todos los mensajes generados por comandos `/speckit-*`. El código fuente, identificadores, nombres de archivos y strings técnicos (variables, rutas, SQL) permanecen en inglés.
 
+## Gestión de Secretos — Convención obligatoria
+
+**Todos los valores sensibles van a GCP Secret Manager.** Nunca en `app.yaml`, código fuente ni archivos trackeados por git.
+
+### Campos considerados secretos
+- Contraseñas de base de datos
+- Claves privadas JWT / API keys
+- Tokens de integración con servicios externos
+
+### Secretos actuales
+
+| Variable de entorno | Secreto en Secret Manager | Proyecto GCP |
+|---------------------|---------------------------|--------------|
+| `DB_PASSWORD` | `loopi-db-password` | `quotes-api-100` |
+| `JWT_SECRET` | `loopi-jwt-secret` | `quotes-api-100` |
+
+### Para agregar un nuevo secreto
+
+1. Crear el secreto en Secret Manager:
+   ```bash
+   echo -n 'VALOR' | gcloud secrets create loopi-<nombre> \
+     --data-file=- --replication-policy="automatic" --project=quotes-api-100
+   ```
+2. Agregar referencia en `app.yaml` bajo `secret_env_variables`:
+   ```yaml
+   secret_env_variables:
+     - name: NOMBRE_VAR_ENV
+       secret: loopi-<nombre>
+       version: latest
+   ```
+3. Leer el valor en `pkg/config/config.go` con `getEnv("NOMBRE_VAR_ENV", "")`.
+4. Documentar en `.env.example` con instrucciones para desarrollo local.
+
+---
+
 ## Stack y arquitectura
 
 - **Lenguaje**: Go 1.24, módulo `github.com/manuelgomezsw/loopi-api`
@@ -142,5 +177,5 @@ Siempre que se agregue/cambie:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/001-multi-schema-db/plan.md`
+`specs/002-migrate-secrets-gcp/plan.md`
 <!-- SPECKIT END -->
