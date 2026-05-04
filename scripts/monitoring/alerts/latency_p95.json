@@ -27,9 +27,6 @@
   ],
   "combiner": "OR",
   "alertStrategy": {
-    "notificationRateLimit": {
-      "period": "600s"
-    },
     "autoClose": "3600s"
   },
   "severity": "WARNING"

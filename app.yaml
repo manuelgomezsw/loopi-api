@@ -12,11 +12,22 @@ env_variables:
   SERVER_PORT: "8080"
   DB_INSTANCE_CONNECTION: "quotes-api-100:us-east1:quotes-instance"
   DB_USER: "loopi-user"
-  DB_PASSWORD: "7:Z\"I3=9,(VCU1R+"
-  DB_NAME: "loopi"
-  JWT_SECRET: "y4mmCP+GXmkNogRwxzqBKuNO72j29fkr4T65wzCN5Ug="
+  APP_ENV: "production"
   JWT_EXPIRATION_HOURS: "24"
   TZ: "America/Bogota"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  SERVICE_NAME: "loopi-api"
+  SERVICE_VERSION: "1.0.0"
+  SERVICE_ENV: "production"
+
+secret_env_variables:
+  - name: DB_PASSWORD
+    secret: loopi-db-password
+    version: latest
+  - name: JWT_SECRET
+    secret: loopi-jwt-secret
+    version: latest
 
 handlers:
   - url: /.*
