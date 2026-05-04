@@ -1,0 +1,50 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Loopi API - Debug",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/api/main.go",
+      "envFile": "${workspaceFolder}/.env",
+      "args": [],
+      "showLog": true
+    },
+    {
+      "name": "Loopi API - Run",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/api/main.go",
+      "envFile": "${workspaceFolder}/.env",
+      "args": []
+    },
+    {
+      "name": "Loopi API - Debug (with .env)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/api/main.go",
+      "envFile": "${workspaceFolder}/.env",
+      "args": [],
+      "showLog": true
+    },
+    {
+      "name": "Debug Current Test",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${fileDirname}",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "3306",
+        "DB_USER": "loopi",
+        "DB_PASSWORD": "loopi_secret",
+        "DB_NAME": "loopi_test",
+        "JWT_SECRET": "test-secret"
+      },
+      "args": ["-test.v"]
+    }
+  ]
+}

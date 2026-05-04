@@ -61,16 +61,6 @@ type JWTConfig struct {
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 
-	appEnv, err := getEnvRequired("APP_ENV")
-	if err != nil {
-		return nil, err
-	}
-
-	dbName, err := resolveDBName(appEnv)
-	if err != nil {
-		return nil, err
-	}
-
 	jwtExpHours, err := strconv.Atoi(getEnv("JWT_EXPIRATION_HOURS", "24"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid JWT_EXPIRATION_HOURS: %w", err)
@@ -89,7 +79,7 @@ func Load() (*Config, error) {
 			Port:               getEnv("DB_PORT", "3306"),
 			User:               getEnv("DB_USER", "loopi"),
 			Password:           getEnv("DB_PASSWORD", ""),
-			Name:               dbName,
+			Name:               getEnv("DB_NAME", "loopi"),
 			InstanceConnection: getEnv("DB_INSTANCE_CONNECTION", ""),
 		},
 		JWT: JWTConfig{
@@ -128,25 +118,4 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
-}
-
-// getEnvRequired retrieves an environment variable and returns an error if it is not set or empty.
-func getEnvRequired(key string) (string, error) {
-	value, exists := os.LookupEnv(key)
-	if !exists || value == "" {
-		return "", fmt.Errorf("required environment variable %q is not set", key)
-	}
-	return value, nil
-}
-
-// resolveDBName maps an APP_ENV value to the corresponding MySQL schema name.
-func resolveDBName(appEnv string) (string, error) {
-	switch appEnv {
-	case "development", "test":
-		return "loopi_dev", nil
-	case "production":
-		return "loopi_prod", nil
-	default:
-		return "", fmt.Errorf("unknown APP_ENV value %q: must be one of: development, test, production", appEnv)
-	}
 }

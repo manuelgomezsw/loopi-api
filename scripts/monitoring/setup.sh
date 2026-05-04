@@ -37,12 +37,12 @@ fi
 
 # ── 2. Uptime Check ──────────────────────────────────────────────────────────
 echo "▶ Creando uptime check para /health ..."
-gcloud monitoring uptime create "loopi-api /health" \
-  --resource-type=uptime-url \
-  --resource-labels="host=${APP_HOST},project_id=${PROJECT_ID}" \
+gcloud monitoring uptime create \
+  --display-name="loopi-api /health" \
+  --resource-type="uptime_url" \
+  --host="$APP_HOST" \
   --path="/health" \
-  --period=5 \
-  --protocol=https \
+  --check-interval=300 \
   --project="$PROJECT_ID" \
   2>&1 || echo "  ⚠ Uptime check ya existe o requiere permisos adicionales."
 echo "  ✓ Uptime check configurado (cada 5 min)"
@@ -67,7 +67,7 @@ json.dump(data, open('$tmp','w'), indent=2)
 "
   fi
 
-  gcloud monitoring policies create \
+  gcloud alpha monitoring policies import \
     --policy-from-file="$tmp" \
     --project="$PROJECT_ID" \
     2>&1 && echo "  ✓ $name" || echo "  ⚠ $name — verificar manualmente"
