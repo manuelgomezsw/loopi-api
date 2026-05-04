@@ -50,6 +50,12 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_CREDENTIALS }}
 
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: '>= 450.0.0'
+          install_components: 'app-engine-go'
+
       - name: Deploy to App Engine
         uses: google-github-actions/deploy-appengine@v2
         with:
