@@ -1,0 +1,48 @@
+name: Sync master → develop
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [master]
+
+jobs:
+  sync:
+    name: Open PR master → develop
+    if: |
+      github.event.pull_request.merged == true &&
+      (startsWith(github.event.pull_request.head.ref, 'release/') ||
+       startsWith(github.event.pull_request.head.ref, 'hotfix/'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          VERSION="${BRANCH#release/}"
+          VERSION="${VERSION#hotfix/}"
+          echo "value=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create PR master → develop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base develop \
+            --head master \
+            --title "chore: sync v${{ steps.version.outputs.value }} → develop" \
+            --body "Merge automático generado después de la ${{ github.event.pull_request.head.ref }} mergeada a \`master\`.
+
+          **Versión:** v${{ steps.version.outputs.value }}
+          **PR origen:** #${{ github.event.pull_request.number }}
+
+          > Revisar y aprobar para mantener \`develop\` sincronizado con producción." \
+            --label "sync" || echo "PR ya existe o develop está al día"
