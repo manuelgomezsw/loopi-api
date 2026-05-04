@@ -13,6 +13,8 @@ jobs:
       (startsWith(github.event.pull_request.head.ref, 'release/') ||
        startsWith(github.event.pull_request.head.ref, 'hotfix/'))
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
