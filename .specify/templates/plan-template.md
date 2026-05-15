@@ -103,6 +103,9 @@ migrations/
 
 1. Implement repository method in `internal/infrastructure/repository/mysql_<domain>_repository.go`
 2. Write or update DB migration in `migrations/` if schema changes
+   - Naming: `migrations/NNNN_<description>.up.sql` + `migrations/NNNN_<description>.down.sql`
+   - NNNN = next sequential number after the current highest (`013_*`)
+   - Run locally: `make migrate-up` to verify migration applies cleanly
 
 ### Phase 3: Application (Service) Layer
 
@@ -122,6 +125,14 @@ migrations/
 2. 🟢 Run tests, confirm pass
 3. 🔵 Refactor, confirm still passing
 4. `make test-coverage` — confirm ≥ 80% coverage for new code
+
+### Phase 6: Observabilidad OTel *(obligatoria si la operación es no-trivial)*
+
+1. Agregar span en el service: `tracer.Start(ctx, "domain.Method")` + `defer span.End()`
+2. Registrar métrica de negocio en `pkg/observability/metrics.go` si aplica
+3. Verificar en GCP Cloud Trace que el span aparece correctamente en local/staging
+
+> Si la feature solo agrega un campo o es un CRUD trivial sin lógica de negocio compleja, esta fase puede omitirse con justificación en "Complexity Tracking".
 
 ## Complexity Tracking
 

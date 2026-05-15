@@ -87,6 +87,29 @@
 - **SC-002**: [Measurable metric, e.g., "New code coverage ≥ 80%"]
 - **SC-003**: [Business metric]
 
+## Migración de Base de Datos *(incluir si la feature requiere cambios de esquema)*
+
+| # | Archivo | Tipo | Descripción del cambio |
+|---|---------|------|------------------------|
+| NNNN | `migrations/NNNN_[descripción].up.sql` | CREATE / ALTER / INDEX | [qué cambia en el esquema] |
+| NNNN | `migrations/NNNN_[descripción].down.sql` | DROP / REVERT | [cómo revertir] |
+
+> Si no hay cambio de esquema, eliminar esta sección.
+
+## Secretos GCP *(incluir solo si la feature requiere nuevas variables sensibles)*
+
+| Variable de entorno | Secreto en Secret Manager | Proyecto GCP | Uso |
+|---------------------|---------------------------|--------------|-----|
+| `NOMBRE_VAR` | `loopi-<nombre>` | `quotes-api-100` | [para qué se usa] |
+
+**Pasos para agregar:**
+1. `echo -n 'VALOR' | gcloud secrets create loopi-<nombre> --data-file=- --replication-policy="automatic" --project=quotes-api-100`
+2. Agregar referencia bajo `secret_env_variables` en `app.yaml`
+3. Leer en `pkg/config/config.go` con `getEnv("NOMBRE_VAR", "")`
+4. Documentar en `.env.example`
+
+> Si no hay nuevos secretos, eliminar esta sección.
+
 ## Assumptions
 
 - [Assumption about scope, e.g., "Admin-only endpoint, protected by `middleware.AdminOnly`"]
