@@ -103,6 +103,11 @@ description: "Task list template for loopi-api feature implementation"
   - No logging in handlers
 - [ ] T017 [US1] Register route in `internal/interface/router/router.go`
 
+### Observabilidad OTel *(si la operación es no-trivial)*
+
+- [ ] T018 [US1] Add OTel span in service: `tracer.Start(ctx, "domain.Method")` + `defer span.End()`
+- [ ] T019 [US1] Register business metric in `pkg/observability/metrics.go` if applicable
+
 **Checkpoint**: User Story 1 fully functional — `make test-coverage` shows ≥ 80% for new code.
 
 ---
@@ -131,6 +136,10 @@ description: "Task list template for loopi-api feature implementation"
 
 - [ ] T024 [US2] Implement handler in `internal/interface/handler/<domain>/`
 - [ ] T025 [US2] Register route in `internal/interface/router/router.go`
+
+### Observabilidad OTel *(si la operación es no-trivial)*
+
+- [ ] T026 [US2] Add OTel span in service: `tracer.Start(ctx, "domain.Method")` + `defer span.End()`
 
 **Checkpoint**: User Stories 1 AND 2 both functional independently.
 
